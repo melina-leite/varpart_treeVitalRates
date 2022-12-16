@@ -1,0 +1,44 @@
+ Family: gaussian 
+  Links: mu = identity; sigma = identity 
+Formula: g.dbh ~ 1 + (1 | quadrat) + (1 | sp) + (1 | time) + (1 | quadrat:sp) + (1 | quadrat:time) + (1 | sp:time) 
+   Data: data (Number of observations: 61038) 
+Samples: 3 chains, each with iter = 3000; warmup = 1000; thin = 5;
+         total post-warmup samples = 1200
+
+Group-Level Effects: 
+~quadrat (Number of levels: 1988) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+sd(Intercept)     0.28      0.01     0.26     0.32 1.40       35      282
+
+~quadrat:sp (Number of levels: 14621) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+sd(Intercept)     0.99      0.01     0.96     1.00 1.37        7      158
+
+~quadrat:time (Number of levels: 5895) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+sd(Intercept)     0.13      0.01     0.11     0.17 1.16       14      559
+
+~sp (Number of levels: 40) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+sd(Intercept)     0.72      0.06     0.54     0.83 1.29       21      677
+
+~sp:time (Number of levels: 120) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+sd(Intercept)     0.20      0.01     0.16     0.23 1.30      381      434
+
+~time (Number of levels: 3) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+sd(Intercept)     0.61      0.63     0.12     2.84 1.67        5       43
+
+Population-Level Effects: 
+          Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+Intercept     0.87      0.55    -0.12     1.55 1.52        6       63
+
+Family Specific Parameters: 
+      Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+sigma     1.28      0.00     1.27     1.28 1.19       11      806
+
+Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+and Tail_ESS are effective sample size measures, and Rhat is the potential
+scale reduction factor on split chains (at convergence, Rhat = 1).
+

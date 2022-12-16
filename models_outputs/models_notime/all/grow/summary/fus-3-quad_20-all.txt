@@ -1,0 +1,32 @@
+ Family: gaussian 
+  Links: mu = identity; sigma = identity 
+Formula: g.dbh ~ 1 + (1 | quadrat) + (1 | sp) + (1 | quadrat:sp) 
+   Data: data (Number of observations: 83059) 
+  Draws: 3 chains, each with iter = 600; warmup = 200; thin = 5;
+         total post-warmup draws = 240
+
+Group-Level Effects: 
+~quadrat (Number of levels: 625) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+sd(Intercept)     0.34      0.01     0.31     0.37 1.00     1043     1091
+
+~quadrat:sp (Number of levels: 16629) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+sd(Intercept)     0.52      0.01     0.50     0.54 1.00     1031     1209
+
+~sp (Number of levels: 98) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+sd(Intercept)     0.82      0.07     0.70     0.97 1.00      761      984
+
+Population-Level Effects: 
+          Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+Intercept     1.00      0.09     0.83     1.18 1.00      382      610
+
+Family Specific Parameters: 
+      Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+sigma     1.50      0.00     1.49     1.51 1.00     1266     1130
+
+Draws were sampled using sampling(NUTS). For each parameter, Bulk_ESS
+and Tail_ESS are effective sample size measures, and Rhat is the potential
+scale reduction factor on split chains (at convergence, Rhat = 1).
+

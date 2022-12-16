@@ -1,0 +1,647 @@
+---
+title: "RESULTS NOTIME excluding/regrouping rare species"
+author: "Melina Leite"
+date: "`r  Sys.Date()`"
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "..") })
+output:
+  rmdformats::readthedown:
+  highlight: kate
+self_contained: true
+thumbnails: false
+lightbox: true
+gallery: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = T, warning = F, fig.align = "center", message = F,
+  error = F, cache = F, cache.lazy = FALSE)
+
+library(knitr)
+library(tidyverse); library(cowplot); library(patchwork); library(ggrepel)
+theme_set(theme_cowplot())
+library(ggbeeswarm)
+library(DirichletReg)
+library(here)
+```
+
+
+Running models with different datasets:
+
+-   **all**: original data, all species all individuals
+
+-   **exclude**: exclude rare species
+
+-   **regroup**: regrouping observations of rare species in ONE species group
+
+Using only the **5x5 m quadrat scale**
+
+```{r run}
+#Figures colors/labels
+cores <- c("#c00000", "#b666d2", "#70ad47", "#ffc000")
+
+labvit <- as_labeller(c(grow = "Growth", mort="Mortality", 
+                        rec="Recruitment"))
+grplab = as_labeller(c(quadrat = "Space", `quadrat:sp`= "Space X Species",
+                       sp="Species", Residual = "residual"))
+grpvit <- as_labeller(c(grow = "Growth", mort="Mortality", 
+                        rec="Recruitment",
+                        quadrat = "Space", `quadrat:sp`= "Species X Space",
+                        sp="Species", Residual = "Residual"))
+```
+
+# Data
+
+Growth
+
+```{r}
+grp <- c("all","exclude", "regroup")
+tudo <- list()
+path1 = here("models_outputs/models_notime/")
+for (i in 1:length(grp)){
+  path <- paste0(path1, grp[i], "/grow/table")
+  files = list.files(path)
+  all <-  lapply(files, function(x) get(assign(x, load(paste0(path, "/", x)))))
+  names(all) <- substr(files,1,nchar(files)-6)
+  tudo[[i]] <- all
+}
+names(tudo) <- grp
+tes <- map(tudo,bind_rows, .id="id") %>% bind_rows() %>% filter(q_size=="quad_5")
+
+#tes %>% count(data,fplot) %>% mutate(n=n/8)
+table(tes$fplot,tes$data)/5
+
+#remove intercept to include again as a separate column
+intercepts <- tes %>% filter(term == "intercept")
+names(intercepts)[9] = "intercept"
+
+grow <- tes %>% filter(term != "intercept") %>%
+  left_join(intercepts[,c(1:4,9)], by= c("id", "data", "fplot", "time")) %>%
+  group_by(id, data, fplot, time) %>% 
+  mutate(VPC = variance/sum(variance))  %>% ungroup() %>%
+  mutate(term = fct_relevel(term, "quadrat", "quadrat:sp", "sp", "Residual")) %>%
+  as.data.frame()
+
+# divide the sd of the terms by the mean growth (intercept) for each dataset.
+grow$stdev = grow$Estimate/grow$intercept
+```
+
+Mort
+
+```{r}
+grp <- c("all","exclude", "regroup")
+tudo <- list()
+path1 = here("models_outputs/models_notime/")
+for (i in 1:length(grp)){
+  path <- paste0(path1,grp[i], "/mort/table")
+  files = list.files(path)
+  all <-  lapply(files, function(x) get(assign(x, load(paste0(path, "/", x)))))
+  names(all) <- substr(files,1,nchar(files)-6)
+  tudo[[i]] <- all
+}
+names(tudo) <- grp
+tes <- map(tudo,bind_rows, .id="id") %>% bind_rows() %>% filter(q_size=="quad_5")
+
+#tes %>% count(data,fplot) %>% mutate(n=n/8)
+table(tes$fplot,tes$data)/5
+
+#remove intercept to include again as a separate column
+intercepts <- tes %>% filter(term == "intercept")
+names(intercepts)[9] = "intercept"
+
+mort <- tes %>% filter(term != "intercept") %>%
+  left_join(intercepts[,c(1:4,9)], by= c("id", "data", "fplot", "time")) %>%
+  group_by(id, data, fplot, time) %>% 
+  mutate(VPC = variance/sum(variance))  %>% ungroup() %>%
+  mutate(term = fct_relevel(term, "quadrat", "quadrat:sp", "sp", "Residual")) %>%
+  as.data.frame()
+mort$stdev = mort$Estimate
+```
+
+Rec
+
+```{r}
+grp <- c("all","exclude", "regroup")
+tudo <- list()
+path1 = here("models_outputs/models_notime/")
+for (i in 1:length(grp)){
+  path <- paste0(path1,grp[i], "/rec/table")
+  files = list.files(path)
+  all <-  lapply(files, function(x) get(assign(x, load(paste0(path, "/", x)))))
+  names(all) <- substr(files,1,nchar(files)-6)
+  tudo[[i]] <- all
+}
+names(tudo) <- grp
+tes <- map(tudo,bind_rows, .id="id") %>% bind_rows() %>% filter(q_size=="quad_5")
+
+#tes %>% count(data,fplot) %>% mutate(n=n/8)
+table(tes$fplot,tes$data)/5
+
+#remove intercept to include again as a separate column
+intercepts <- tes %>% filter(term == "intercept")
+names(intercepts)[9] = "intercept"
+
+rec <- tes %>% filter(term != "intercept") %>%
+  left_join(intercepts[,c(1:4,9)], by= c("id", "data", "fplot", "time")) %>%
+  group_by(id, data, fplot, time) %>% 
+  mutate(VPC = variance/sum(variance))  %>% ungroup() %>%
+  mutate(term = fct_relevel(term, "quadrat", "quadrat:sp", "sp", "Residual")) %>%
+  as.data.frame()
+rec$stdev = rec$Estimate
+```
+
+Excluding recruitment for Wytham Woods, as in "all data".
+```{r}
+rec <- rec %>% filter(fplot!="wyw")
+```
+
+
+Combining results.
+```{r}
+comb <- bind_rows(list(grow=grow, mort=mort, rec=rec), .id="vital") %>%
+  mutate(term = fct_relevel(term, "quadrat", "quadrat:sp", "sp","Residual")) %>%
+  ungroup() 
+```
+
+
+
+
+# Comparing groups
+
+```{r, fig.height=10, fig.width=20}
+comb %>% 
+  ggplot(aes(x=data, y=VPC)) +
+  geom_col(aes(fill=term, color=term), alpha=0.7) +
+  scale_fill_manual(values=cores) +
+  scale_color_manual(values=cores) +
+  facet_grid(vital~fplot+time) +
+  theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+
+mean over fplots
+
+```{r}
+comb %>% group_by(vital,data,term) %>% summarise(VPC=mean(VPC)) %>%
+  ggplot(aes(x=data, y=VPC)) +geom_col(aes(fill=term, color=term), alpha=0.7) +
+  scale_fill_manual(values=cores) + 
+  scale_color_manual(values=cores) +
+  facet_grid(~vital)+
+  theme(axis.text.x = element_text(angle=45, hjust=1))+
+  labs(tag="a)")
+#ggsave("figs/FIG_S4.4a_groups_mean.jpg", width=20, height = 10, units = "cm")
+```
+
+```{r, fig.height=8}
+comb %>%
+  ggplot(aes(x=data,y=VPC, col=data)) + geom_boxplot()+
+  facet_grid(vital~term) +
+  theme(axis.text.x = element_text(angle=45,hjust=1),
+        legend.position = "none")
+```
+
+```{r}
+comb %>% mutate(xis = as.numeric(as.factor(data))) %>%
+  ggplot(aes(x=xis,y=stdev, col=paste(fplot,time))) + geom_line() +
+  facet_grid(vital~term) + 
+  scale_x_continuous(breaks = 1:3, labels=levels(comb$data),
+                     name="") +
+  theme(axis.text.x = element_text(angle=45, hjust=1),
+        legend.position = "none")
+```
+
+```{r}
+comb %>% mutate(xis = as.numeric(as.factor(data))) %>%
+  ggplot(aes(x=xis,y=VPC, col=paste(fplot,time))) + geom_line() +
+  facet_grid(vital~term) + 
+  scale_x_continuous(breaks = 1:3, labels=levels(comb$data),
+                     name="") +
+  theme(axis.text.x = element_text(angle=45, hjust=1),
+        legend.position = "none")
+```
+
+
+
+## Difference to all data
+
+### Absolute difference
+
+```{r}
+dif <- comb %>% 
+  pivot_wider(id_cols = c(vital,fplot,time,term),
+              names_from = data,
+              values_from = c(stdev,VPC, richness)) %>%
+  mutate(stdev.dif_exclude = stdev_exclude - stdev_all,
+         VPC.dif_exclude =  VPC_exclude - VPC_all,
+         stdev.dif_regroup = stdev_regroup - stdev_all,
+         VPC.dif_regroup =  VPC_regroup - VPC_all) %>%
+  select(vital,fplot,time,term,richness_exclude,
+         stdev.dif_exclude,
+         stdev.dif_regroup, VPC.dif_exclude, VPC.dif_regroup) %>%
+  pivot_longer(6:9, names_to = c("index", "data"), names_sep = "_",
+                #names_pattern = "(.*_).(.*)",
+                values_to =  "value") %>%
+  pivot_wider(names_from = index, values_from = value)
+```
+
+```{r, fig.height=6, fig.width=8}
+dif %>%
+  ggplot(aes(x=data, y=stdev.dif)) + 
+  facet_grid(vital~term, scales= "free_x") +
+  geom_boxplot() +
+  geom_quasirandom(aes(col=fplot)) +
+  ylab("SD no.rare - SD all") + xlab("") +
+  geom_hline(yintercept = 0, linetype= "dotted")  +
+  ggtitle("Difference in SD") +
+  theme(legend.position = "right",
+        panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45, hjust=1))
+```
+
+```{r, fig.height=6, fig.width=8}
+dif %>%
+  ggplot(aes(x=data, y=VPC.dif)) + 
+  facet_grid(vital~term, scales= "free_x") +
+  geom_boxplot() +
+  geom_quasirandom(aes(col=fplot)) +
+  ylab("VPC no.rare - VPC all") + xlab("") +
+  geom_hline(yintercept = 0, linetype= "dotted")  +
+  ggtitle("Difference in VPC") +
+  theme(legend.position = "right",
+        panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45, hjust=1))
+```
+
+### Relative difference SD
+
+```{r}
+difr <- comb %>% 
+  pivot_wider(id_cols = c(vital,fplot,time,term),
+              names_from = data,
+              values_from = c(stdev,VPC, richness)) %>%
+  mutate(stdev.dif_exclude = (stdev_exclude - stdev_all)*100/stdev_all,
+         stdev.dif_regroup = (stdev_regroup - stdev_all)*100/stdev_all) %>%
+  select(vital,fplot,time,term,richness_exclude,
+         stdev.dif_exclude,stdev.dif_regroup) %>%
+  pivot_longer(6:7, names_to = "data",
+                values_to =  "stdev.dif") %>%
+  mutate(data = substr(data,11, nchar(data)))
+```
+
+```{r, fig.height=6, fig.width=8}
+difr %>%
+  ggplot(aes(x=data, y=stdev.dif)) + 
+  facet_grid(vital~term, scales= "free_x") +
+  geom_boxplot() +
+  geom_quasirandom(aes(col=fplot)) +
+  ylab("Proportional difference (%)") + xlab("") +
+  geom_hline(yintercept = 0, linetype= "dotted")  +
+  ggtitle("Relative difference in SD") +
+  theme(legend.position = "right",
+        panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45, hjust=1))
+```
+
+```{r}
+difr %>% group_by(vital, term, data) %>% summarise(mean=mean(stdev.dif, na.rm=T)) %>%
+  pivot_wider(names_from = term, values_from = mean)
+```
+
+#### table
+
+Relative differences in SD
+
+```{r}
+difr %>% group_by(vital, term, data) %>% 
+  summarise(mean=mean(stdev.dif, na.rm=T)) %>%
+  pivot_wider(names_from = c(vital,data), values_from = mean) %>%
+  kable(digits=1)
+```
+
+Mean absolute differences in VPC
+
+```{r}
+dif %>% group_by(vital, term, data) %>% 
+  summarise(mean=mean(VPC.dif, na.rm=T)) %>%
+  pivot_wider(names_from = c(vital,data), values_from = mean) -> write
+kable(write)
+```
+
+## Comparing with NUMBER of rare species
+
+```{r, fig.height=6, fig.width=12}
+dif %>%
+  ggplot(aes(x=richness_exclude, y=stdev.dif, shape=data)) + 
+  geom_point(aes(col=fplot)) + 
+  geom_smooth(method="lm", se=F, aes(linetype=data)) +
+  facet_grid(vital~term) +
+  ylab("Difference in SD to original data") +
+  xlab("log N of rare species") +
+  geom_hline(yintercept = 0, linetype= "dotted")  +
+  ggtitle("Difference in SD") +
+  scale_x_log10()+
+  theme(axis.text.x = element_text(angle=45, hjust=1),
+        )
+```
+
+```{r, fig.height=6, fig.width=12}
+difr %>%
+  ggplot(aes(x=richness_exclude, y=stdev.dif, shape=data)) + 
+  geom_point(aes(col=fplot)) + 
+  geom_smooth(method="lm", se=F, aes(linetype=data)) +
+  facet_grid(vital~term) +
+  ylab("Relative difference in SD to original data") +
+  xlab("log N of rare species") +
+  geom_hline(yintercept = 0, linetype= "dotted")  +
+  ggtitle("Proportional difference in SD to original data") +
+  theme(axis.text.x = element_text(angle=45, hjust=1),
+        panel.background = element_rect(fill="white", color="black"))
+```
+
+```{r, fig.height=6, fig.width=12}
+pm <- dif %>%
+  ggplot(aes(x=richness_exclude, y=VPC.dif, shape=data)) + 
+  geom_point(aes(col=fplot)) + 
+  facet_grid(vital~term) +
+   geom_smooth(method="lm", se=F, aes(linetype=data)) +
+  ylab(" Absolute difference in VPC to original data") +
+   xlab("log N of rare species") +
+  geom_hline(yintercept = 0, linetype= "dotted")  +
+  theme(axis.text.x = element_text(angle=45, hjust=1),
+        panel.background = element_rect(fill="white", color="black"))
+pm
+```
+
+
+# Dirichlet regression for exclude results with species richness
+
+Richness by rarefaction at the 6ha plot size (sampling unit 20x20m)
+
+```{r}
+load(here("data", "rarefaction.curves.Rdata"))
+rich.rare <- rare[rare$sites ==150,2:3]
+colnames(rich.rare)[1] <- "richness.rarefaction"
+comb <- comb %>% left_join(rich.rare, by="fplot")
+```
+
+Latitude
+
+```{r}
+load(here("data", "plots_structure.Rdata"))
+comb <- comb %>% left_join(plots.structure[,1:2], "fplot")
+```
+
+```{r}
+#mean for each forest
+mcomb <- comb %>% group_by(vital,data, fplot,term, lat) %>%
+  summarise(VPC = mean(VPC),
+            stdev = mean(stdev),
+            richness.rarefaction = mean(richness.rarefaction))
+```
+
+## GROWTH
+
+```{r}
+predirig <-  mcomb %>% 
+  filter(vital == "grow", data == "exclude") %>%
+  select(fplot, term, VPC, richness.rarefaction,lat) 
+diridatag <- predirig %>%
+  pivot_wider(names_from = term, values_from = VPC) %>% ungroup() %>%
+  mutate(log.rich = log(richness.rarefaction),
+         log.rich.o=log.rich) %>%
+  mutate_at(vars( log.rich), scale)
+
+vpcg <- DR_data(diridatag[,c("quadrat", "sp", "quadrat:sp",  "Residual")])
+#plot(vpc)
+```
+
+```{r, echo=T}
+grow2 <- DirichReg(vpcg~log.rich, data=diridatag, model="alternative", base=4)
+summary(grow2)
+```
+
+```{r}
+newdata <- expand.grid(log.rich = seq(min(diridatag$log.rich),
+                                      max(diridatag$log.rich), length.out=10))
+pred <- predict(grow2, newdata = newdata, se=T)
+confint(grow2)
+colnames(pred) <- colnames(vpcg)
+newdata$log.rich.o <- newdata$log.rich*sd(diridatag$log.rich.o) +
+  mean(diridatag$log.rich.o)
+newdata$rich.o <- exp(newdata$log.rich.o)
+newpredg <- cbind(newdata,pred) %>% pivot_longer(`quadrat`:`Residual`, names_to="term", values_to="pred")
+
+newpredg %>% mutate(term = fct_relevel(term, "quadrat", "quadrat:sp", "sp",
+                                       "Residual")) %>%
+  ggplot(aes(x=rich.o, y=pred, col=term)) +
+  geom_line() + facet_grid(~term) +
+  geom_point(data=predirig, aes(x=richness.rarefaction, y=VPC, col=term)) +
+  scale_x_log10() +
+  ggtitle("Mod log.rich")
+```
+
+Residuals
+
+```{r}
+resid <- residuals(grow2, type = "standardized")
+resid <-  data.frame(resid[,1:4])
+resid$log.rich <- diridatag$log.rich
+resid <- resid %>% pivot_longer(1:4, names_to="term", values_to="resid")
+
+ggplot(resid, aes(x=log.rich, y=resid)) + geom_point() +
+  facet_grid(~term)
+```
+
+## MORT
+
+```{r}
+predirim <-  mcomb %>% 
+  filter(vital == "mort", data == "exclude") %>%
+  select(fplot, term, VPC, richness.rarefaction,lat) 
+diridatam <- predirim %>%
+  pivot_wider(names_from = term, values_from = VPC) %>% ungroup() %>%
+  mutate(log.rich = log(richness.rarefaction),
+         log.rich.o=log.rich) %>%
+  mutate_at(vars( log.rich), scale)
+
+vpcm <- DR_data(diridatam[,c("quadrat", "sp", "quadrat:sp",  "Residual")])
+#plot(vpc)
+```
+
+```{r, echo=T}
+mort2 <- DirichReg(vpcm~log.rich,data=diridatam, model="alternative", base=4)
+summary(mort2)
+```
+
+```{r}
+newdata <- expand.grid(log.rich = seq(min(diridatam$log.rich),
+                                      max(diridatam$log.rich), length.out=10))
+pred <- predict(mort2, newdata = newdata, se=T)
+confint(mort2)
+colnames(pred) <- colnames(vpcm)
+newdata$log.rich.o <- newdata$log.rich*sd(diridatam$log.rich.o) +
+  mean(diridatam$log.rich.o)
+newdata$rich.o <- exp(newdata$log.rich.o)
+newpredm <- cbind(newdata,pred) %>% pivot_longer(`quadrat`:`Residual`, names_to="term", values_to="pred")
+
+newpredm %>% mutate(term = fct_relevel(term, "quadrat", "quadrat:sp", "sp",
+                                       "Residual")) %>%
+  ggplot(aes(x=rich.o, y=pred, col=term)) +
+  geom_line() + facet_grid(~term) +
+  geom_point(data=predirim, aes(x=richness.rarefaction, y=VPC, col=term)) +
+  scale_x_log10() +
+  ggtitle("Mod log.rich")
+```
+
+Residuals
+```{r}
+resid <- residuals(mort2, type = "standardized")
+resid <-  data.frame(resid[,1:4])
+resid$log.rich <- diridatam$log.rich
+resid <- resid %>% pivot_longer(1:4, names_to="term", values_to="resid")
+
+ggplot(resid, aes(x=log.rich, y=resid)) + geom_point() +
+  facet_grid(~term)
+```
+
+## REC
+
+```{r}
+predirir <-  mcomb %>% 
+  filter(vital == "rec", data == "exclude") %>%
+  select(fplot, term, VPC, richness.rarefaction,lat) 
+diridatar <- predirir %>%
+  pivot_wider(names_from = term, values_from = VPC) %>% ungroup() %>%
+  mutate(log.rich = log(richness.rarefaction),
+         log.rich.o=log.rich) %>%
+  mutate_at(vars( log.rich), scale)
+
+vpcr <- DR_data(diridatar[,c("quadrat", "sp", "quadrat:sp",  "Residual")])
+#plot(vpc)
+```
+
+```{r}
+rec2 <- DirichReg(vpcr~log.rich,data=diridatar, model="alternative", base=4)
+summary(rec2)
+```
+
+```{r}
+newdata <- expand.grid(log.rich = seq(min(diridatar$log.rich),
+                                      max(diridatar$log.rich), length.out=10))
+pred <- predict(rec2, newdata = newdata, se=T)
+colnames(pred) <- colnames(vpcr)
+newdata$log.rich.o <- newdata$log.rich*sd(diridatar$log.rich.o) +
+  mean(diridatar$log.rich.o)
+newdata$rich.o <- exp(newdata$log.rich.o)
+newpredr <- cbind(newdata,pred) %>% pivot_longer(`quadrat`:`Residual`, names_to="term", values_to="pred")
+
+newpredr %>% mutate(term = fct_relevel(term, "quadrat", "quadrat:sp", "sp",
+                                       "Residual")) %>%
+  ggplot(aes(x=rich.o, y=pred, col=term)) +
+  geom_line() + facet_grid(~term) +
+  geom_point(data=predirir, aes(x=richness.rarefaction, y=VPC, col=term)) +
+  scale_x_log10() +
+  ggtitle("Mod log.rich")
+```
+
+Residuals
+
+```{r}
+resid <- residuals(rec2, type = "standardized")
+resid <-  data.frame(resid[,1:4])
+resid$log.rich <- diridatar$log.rich
+resid <- resid %>% pivot_longer(1:4, names_to="term", values_to="resid")
+
+ggplot(resid, aes(x=log.rich, y=resid)) + geom_point() +
+  facet_grid(~term)
+```
+
+## FIGURE
+
+Calculated prediction interval
+
+```{r}
+source(here("scripts/prediction_intervals_dirichlet_exclude.R"), local=T)
+#load("results/prediction_intervals_dirichlet_exclude.Rdata") #  quants
+```
+
+```{r}
+predis <- bind_rows(list(grow=newpredg, mort=newpredm, rec=newpredr),
+                    .id="vital") %>% 
+  mutate(term = fct_relevel(term, "quadrat", "quadrat:sp", "sp","Residual"))
+
+pontos <- bind_rows(list(grow=predirig, mort= predirim, rec=predirir), .id="vital")%>% 
+  mutate(term = fct_relevel(term, "quadrat", "quadrat:sp", "sp", "Residual"))
+quants <- bind_rows(list(grow=quantg,mort=quantm, rec=quantr), .id="vital")%>% 
+  mutate(term = fct_relevel(term, "quadrat", "quadrat:sp", "sp", "Residual"))
+```
+
+```{r}
+# pvalues
+res <- data.frame(vital = c("grow", "mort", "rec"),
+                  P = NA,
+                  term = "Residual")
+
+test <- summary(grow2)
+vals <- as.data.frame(test$coef.mat)[1:6,]
+vals$coef <- names(test$coefficients)[1:6]
+valsg <- vals[ grep("log.rich", vals$coef),] %>% 
+  mutate(term=c("quadrat", "sp", "quadrat:sp"))
+test <- summary(mort2)
+vals <- as.data.frame(test$coef.mat)[1:6,]
+vals$coef <- names(test$coefficients)[1:6]
+valsm <- vals[ grep("log.rich", vals$coef),] %>% 
+  mutate(term=c("quadrat", "sp", "quadrat:sp"))
+test <- summary(rec2)
+vals <- as.data.frame(test$coef.mat)[1:6,]
+vals$coef <- names(test$coefficients)[1:6]
+valsr <- vals[ grep("log.rich", vals$coef),] %>% 
+  mutate(term=c("quadrat", "sp", "quadrat:sp")) 
+
+pvals <- bind_rows(list(grow=valsg,mort=valsm,rec=valsr), .id="vital") %>%
+  dplyr::select(vital,`Pr(>|z|)`, term) %>% rename(P = `Pr(>|z|)`)
+pvals <- rbind(pvals,res) %>% 
+  mutate(term = fct_relevel(term, "quadrat", "quadrat:sp", "sp", "Residual"))
+
+pvals$x <- 300
+pvals$y <- 0.70
+pvals$sig <- paste0("p = ", round(pvals$P,3))
+#pvals$sig[pvals$P >0.0166] <- "ns"
+pvals$sig[pvals$term=="Residual"] <- ""
+pvals$sig[pvals$sig=="p = 0"] <- "p < 0.0001"
+```
+
+```{r}
+library(wesanderson) #better colour palette
+# Gradient color para latitutde
+pal <- wes_palette("Zissou1",20, type = "continuous")[20:1] # azul frio-temperado
+```
+
+
+```{r}
+fdiri_lat <-ggplot(predis, aes(x=rich.o, y=pred)) +
+  geom_line(size=1) +
+  facet_grid(vital~term, labeller=grpvit) +
+  geom_smooth(data=quants,aes(x=rich.o, y=lower), se=F, size=0.1)+
+  geom_smooth(data=quants,aes(x=rich.o, y=upper), se=F, size=0.1)  +
+  geom_ribbon(data=quants,aes(x=rich.o, ymin=lower, ymax=upper,
+                              y=mean), alpha=0.05, fill="blue",
+              size=0)+
+  geom_point(data=pontos, aes(x=richness.rarefaction, y=VPC, fill=abs(lat)),
+             col="black", size=2.5, pch=21)+
+  scale_fill_gradientn(colors=pal) +
+  scale_y_continuous(minor_breaks = NULL) +
+  scale_x_log10() +
+  geom_text(data=pvals, aes(x=x,y=y, label=sig), size=3, hjust=1,vjust=0,
+            col="black")+
+  
+  xlab("Species richness (log10 scale)")+
+  ylab("VPC") +
+  theme_cowplot() +
+  theme(panel.background = element_rect(colour="lightgray"),
+        legend.position = "none")
+fdiri_lat
+png(here("figures/FIG_S5.5_dirichlet_regressions_lat_exclude.png"), height = 600, width=800, res=100)
+fdiri_lat
+dev.off()
+```

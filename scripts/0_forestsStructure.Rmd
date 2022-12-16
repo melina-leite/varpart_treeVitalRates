@@ -1,0 +1,114 @@
+---
+title: "Forest structure variables"
+author: "Melina Leite"
+date: "`r  Sys.Date()`"
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "..") })
+output:
+  rmdformats::readthedown:
+    highlight: kate
+    self_contained: true
+    thumbnails: false
+    lightbox: true
+    gallery: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = T, warning = F, fig.align = "center", message = F,
+  error = F, cache = F, cache.lazy = FALSE)
+
+library(knitr)
+library(tidyverse); library(cowplot); library(patchwork); 
+theme_set(theme_cowplot())
+library(here)
+library(FactoMineR);library(factoextra) # PCA
+library(pals) # colors
+```
+
+
+# Species rarefaction curves
+
+We calculated rarefied species richness to compare forest plots across the globe, given that forest plots vary from 6 to 50 ha in size. Rarefaction was constructed based on sampling increment and each sample was a quadrat of 20x20 m quadrat size. We used the R packages BiodiversityR (Kindt & Coe, 2005) and vegan (Oksanen et al., 2020), following Gotelli & Collwel (2001) suggestions for rarefaction curve construction and used the species richness estimated at the smallest plot size.
+
+
+```{r}
+load(here("data", "rarefaction.curves.Rdata"))
+#colors
+
+pcols <- cols25(n=21)
+names(pcols) <- unique(rare$fplot)
+```
+
+```{r}
+prare <- ggplot(rare, aes(x=area,y=richness,col=fplot)) + geom_line() +
+  geom_vline(xintercept=6, linetype="dotted") + 
+  scale_color_manual(values=pcols, name="Plot") +
+  scale_y_log10()+
+  xlab("Area (ha)") + ylab("Species richness (log10)") +
+  theme(legend.position = "bottom")
+prare
+png(here("figures", "FIG_S5.1_rarefaction_curves.png"), height = 700, width=800, res=150)
+prare
+dev.off()
+```
+
+
+# Forest structure
+
+Contrasting forest strucutre and other variable across plots: 
+
+- Species richness
+
+    - Rarefied species richness (6ha)
+
+    - Total raw number of specie
+
+    - Mean richness at 50x50m quadrat size
+
+    - Coefficient of Variation (CV) of richness at 50x50m quadrat size
+
+- Tree density
+
+    - Total number of trees 
+    
+    - Mean tree density at 50x50m quadrat size
+
+    - Coefficient of Variation (CV) of tree density  at 50x50m quadrat size
+
+- Latitude
+
+- Biogeographic realm
+
+```{r}
+load(here("data", "plots_structure.Rdata"))
+```
+
+Taking the log of richness and number of trees 
+```{r}
+struc <- plots.structure %>% mutate_at(vars("n.species", "richness.rarefaction",
+                                         "rich.mean50",
+                                         "ntrees.total", "ntrees.mean50"), log) %>%
+  as.data.frame()
+rownames(struc) <- struc$fplot
+```
+
+PCA of variables
+```{r}
+pca.var <- PCA(struc[,c(2, 5:11)], graph=F)
+fviz_pca(pca.var, repel=T,col.var="contrib")
+
+png(here("figures", "FIG_S5.2_pca_forestvariables.png"), height = 700, width=1000, res=150)
+fviz_pca(pca.var, repel=T,col.var="contrib")
+dev.off()
+```
+
+
+# References
+
+
+Gotelli, N.J. & Colwell, R.K. (2001) Quantifying biodiversity: procedures and pitfalls in the measurement and comparison of species richness. Ecology Letters, 4, 379–391.
+
+Kindt, R. & Coe, R. (2005) Tree diversity analysis: a manual and software for common statistical methods for ecological and biodiversity studies, World Agrofirestry Centre, Nairobi, Kenya.
+
+Oksanen, J., Blanchet, F.G., Friendly, M., Kindt, R., Legendre, P., McGlinn, D., Minchin, P.R., O’Hara, R.B., Simpson, G.L., Solymos, P., Stevens, M.H.H., Szoecs, E. & Wagner, H. (2020) vegan: Community Ecology Package.

@@ -1,0 +1,475 @@
+---
+title: "Forest plot data preparation workflow for Barro Colorado Islands"
+author: "Melina Leite"
+date: "`r Sys.Date()`"
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "..") })
+output:
+  rmdformats::readthedown:
+    highlight: kate
+    self_contained: true
+    thumbnails: false
+    lightbox: true
+    gallery: false
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = T, warning = F, fig.align = "center", message = F,
+  error = F, cache = T, cache.lazy = FALSE)
+
+library(knitr)
+library(tidyverse); library(cowplot); library(patchwork); 
+theme_set(theme_cowplot())
+library(here)
+library(janitor)
+library(forcats)
+
+
+```
+
+This script is part of the repository of analysis from **Leite et al. 2022. Major axe of variation in tree demography across global forests**.
+
+In this section, we will work with Barro Colorado Island (BCI) data as an example of the **data cleaning/wrangling pipeline** used in the analysis of the 21 ForestGEO plots.
+
+The source of the data is avalilable at the Dryad repository:
+
+> Condit, Richard et al. (2019), Complete data from the Barro Colorado 50-ha plot: 423617 trees, 35 years, Dryad, Dataset, https://doi.org/10.15146/5xcp-0d46.
+
+As stated in the Abstract of the dataset:
+
+> "The 50-ha plot at Barro Colorado Island was initially demarcated and fully censused in 1982, and has been fully censused 7 times since, every 5 years from 1985 through 2015. Every measurement of every stem over 8 censuses is included in this archive.(..) This is the 2019 version of the database, frozen as of 30 May 2019."
+
+
+Auxiliary functions for data checking
+```{r}
+source(here("workflow_example","scripts","functions_checking.R"))
+source(here("workflow_example","scripts","functions_status.R"))
+```
+
+
+# 1. Dataset
+
+We will use only the tree level data and the species table.
+
+The data is already in **.Rdata** format.
+
+Plot dimensions.
+```{r}
+plotdimension = matrix(c(0, 1000, 0, 500), ncol = 2, byrow = T)
+plot = list(plotdimension = plotdimension)
+plot
+```
+
+Species table.
+```{r}
+load(here("workflow_example", "bci_rawdata","bci.spptable.rdata"))
+
+species = bci.spptable
+
+# Identifying ferns and palms
+fernpalms <- c("Arecaceae", "Cyatheaceae", "Dicksoniaceae", "Metaxyaceae",
+               "Cibotiaceae","Thyrsopteridaceae", "Loxomataceae", 
+               "Culcitaceae", "Plagiogyriaceae")
+
+species$fern.palm <- "FALSE" 
+species$fern.palm[species$Family %in% fernpalms] <- "TRUE"
+
+#unidentified species
+unind <- species[species$Genus == "Unidentified",]
+
+#morphospecies
+morpho <- species[species$IDLevel == "genus",] 
+```
+
+
+Tree data.  
+A list with 8 tables one per census.   
+Each row is a tree the respective census.  
+
+Columns  
+
+- treeID: identification of the tree  
+- tag ( _not used_ ): tag number of the tree in the field  
+- sp: species identification code, which matches with species table  
+- quadrat ( _not used_ ): quadrat code in the plot  
+- gx and gy: coordinates of the tree in the plot  
+- stemID ( _not used_ ): stem identification (but the data is at tree level)  
+- dbh: diameter at breast height  
+- hom: height of measurement of dbh. usualy is 1.3m  
+- ExactDate: date of measurement  
+- codes ( _not used_ ): codes for tree conditions  
+- date ( _not used_ ):
+- status: status of the tree (see below the code for status)  
+- nostems: number of stems  
+- agb ( _not used_ ): aboveground biomass  
+- ba: basal area  
+
+Status code:  
+
+- A: alive  
+- D: dead  
+- M: missing  
+- P: prior (to recruitment)
+
+ 
+Import data to list   
+```{r}
+path <- here("workflow_example", "bci_rawdata", "bci.tree")
+files = list.files(path)
+tree = lapply(files, function(x) get(assign(x, load(paste0(path, "/", x)))))
+names(tree) = paste0("tree", 1:length(files))
+```
+
+Checking data
+```{r}
+names(tree$tree1)
+str(tree$tree8)
+```
+
+Save ExactDate as.Date as column date
+```{r}
+tree = lapply(tree, transform, date = as.Date(ExactDate))
+```
+
+Add column to indicate changes in high of measurement (HOM) of DBH (diameter at breast height) from one census to the next.
+```{r}
+tree[[1]]$homchange = NA
+for (i in 2:length(tree)) {
+  tree[[i]]$homchange = tree[[i]]$hom != tree[[i-1]]$hom
+}
+```
+
+Create theoretical dbh based on basal area (ba) for multistem trees
+```{r}
+tree <- lapply(tree, function(x){
+  x$dbh <- as.numeric(2000*sqrt(x$ba/pi))
+  x$dbh[which(x$dbh==0)] <- NA
+  x$ba <- as.numeric(x$ba)
+  x
+})
+```
+
+Keeping only the used columns.
+```{r} 
+tree <- lapply(tree, select, c("treeID","sp","gx","gy","dbh","homchange",
+                               'ba', "nostems","status","date"))
+```
+
+Excluding trees with `NA` in gx and gy coordinates.
+```{r} 
+tree <- lapply(tree, function(x){
+  x %>% filter(!is.na(gx), !is.na(gy))
+})
+```
+
+Checking column type.
+```{r} 
+# column type
+tree <- lapply(tree, function(x){
+  x %>% mutate(treeID=as.character(treeID))
+})
+```
+
+Checking and correcting status.
+```{r} 
+tree.orig <- tree
+tree <- correct_status(tree)
+check_status(tree, tree.orig)
+```
+
+Quality checks for tree data
+```{r} 
+check_dim(tree)
+check_col(tree)
+check_types(tree)
+check_order(tree)
+check_units(tree)
+check_nas(tree)
+```
+
+# 2. Growth data
+
+- Selecting only the individuals that were alive (status =="A") in the initial and final census.
+
+- Removing NAs in species and date, removing ferns and palms.
+
+- Removing individuals with <10mm DHB in the initial census.
+
+- Calculating growth: `g.dbh`
+
+- Calculating time interval between measurements in days. Removing intervals with zero and negative days
+
+- Calculating growth rate / year: growth*365/days
+
+```{r}
+n.census <- length(tree)
+growth <- list()
+for (i in 1:(n.census-1)){
+  first <- tree[[i]]
+  second <- tree[[i+1]] %>% dplyr::select(-sp, -gx, -gy)
+  df <- inner_join(first%>%select(-homchange), second, by=c("treeID"), 
+                   suffix= c(".i", ".f"))
+  df <- df %>% filter(status.i == "A" & 
+                      status.f  == "A") %>%
+              filter(dbh.i >=10)
+  df$interval <- df$date.f - df$date.i
+  df$g.ba <- (df$ba.f-df$ba.i)*365/as.numeric(df$interval)
+  df$g.dbh <- (df$dbh.f-df$dbh.i)*365/as.numeric(df$interval)
+  df <- df %>% filter(!is.na(g.dbh), !is.na(g.ba), !is.na(sp), !is.na(interval),
+                      interval>0, sp %in% species$sp[species$fern.palm == "FALSE"])
+  growth[[i]] <- df
+}
+```
+
+Removing trees with different HOM.
+```{r}
+growth <- lapply(growth, function(x) {
+ x[which(x$homchange==FALSE), ]
+})
+```
+
+
+Including Quadrat scales columns.
+```{r}
+scales <- c(5,10,20,50,100)
+
+for (g in 1:(n.census-1)) {
+  dad <- growth[[g]]
+  
+  escas <- as.data.frame(matrix(ncol=length(scales), nrow=nrow(dad)))
+  
+   for (k in 1:length(scales)){
+    scala <- scales[k]
+    xis <- c(0, cumsum(rep(scala, plot[[1]][1,2]/scala)))
+    yis <- c(0, cumsum(rep(scala, plot[[1]][2,2]/scala)))
+    
+    qxis <- qyis <- rep(NA, length=nrow(dad))
+    
+    for (i in 1:(length(xis)-1)){
+      for (n in 1:(length(yis)-1)){
+        qxis[dad$gx >= xis[i] & dad$gx <= xis[i+1]] <- xis[i]
+        qyis[dad$gy >= yis[n] & dad$gy <= yis[n+1]] <- yis[n] 
+      }
+    }
+    colnames(escas)[k] <- paste("quad", scala, sep="_")
+    escas[,k] <- paste(qxis, qyis, sep="_")
+    escas[grep("NA", escas[,k]),k] <- NA
+   }
+  growth[[g]] <- cbind(dad, escas)
+}
+```
+
+
+Removing the extreme trees with more than 4 standard deviations of growth for both tails. It decided after some tests with simulated measurement error data and following literature reccommendations, as in Visser et al. 2016:
+
+>"For data set 1, we excluded individuals marked as ‘resprout’, ‘buttressed’, ‘leaning’ and ‘broken above 1.3 m’ in each census, as well as those with growth rates more than four 4 standard deviations from the mean. These are likely measurement errors (Ru€ger et al. 2011)."
+
+```{r}
+dbh.4sd <- lapply(growth, function(tes){
+  tes[tes$g.dbh < 4*sd(tes$g.dbh) & tes$g.dbh > -4*sd(tes$g.dbh), ]
+})
+```
+
+Resuming table of number of individuals and species in each census interval (time).
+
+```{r}
+ndbh.4sd <- map_df(dbh.4sd,  function(x){
+   data.frame(Nsp = length(unique(x$sp)), N = nrow(x))
+}, .id="time")
+
+ndata <-  ndbh.4sd %>% group_by(time) %>%
+  mutate(perc.loss.Nsp = 1-round(Nsp/Nsp[1],2),
+         perc.loss.N = 1-round(N/N[1],2)) %>%
+  select(time,Nsp, perc.loss.Nsp, N, perc.loss.N ) %>%
+  arrange(time)
+kable(ndata)
+```
+
+Saving growth data object.
+```{r}
+file <- paste0(here("workflow_example", "bci_cleandata"),"/growth.rds")
+saveRDS(dbh.4sd, file=file)
+```
+
+# 3. Mortality data
+
+- Remove trees with NA in species names, ferns and palms; NA, zero or negative date interval 
+
+- Selecting only the individuals that were alive (status "A") in the initial census and Alive or Dead (status "A" or "D") in the final census.
+
+- Create a column to identify if the tree is alive (0) or dead (1)
+
+```{r}
+mort <- list()
+for (i in 1:(n.census-1)){
+  first <- tree[[i]]
+  second <- tree[[i+1]] %>% dplyr::select(-sp, -gx, -gy)
+  df <- inner_join(first, second, by=c("treeID"), 
+                   suffix= c(".i", ".f"))
+  df <- df %>% filter(status.i == "A" & 
+                      status.f  %in% c("A", "D"))%>%
+              filter(dbh.i >=10)
+
+  df$interval <- df$date.f - df$date.i
+  df$dead <- ifelse(df$status.f == 'D', 1, 0)
+  df <- df %>% filter(!is.na(sp), !is.na(interval), interval>0,
+                      sp %in% species$sp[species$fern.palm == "FALSE"])
+  mort[[i]] <- df
+}
+```
+
+Including Quadrat scales columns.
+```{r}
+scales <- c(5,10,20,50,100)
+for (g in 1:(n.census-1)) {
+  dad <- mort[[g]]
+  
+  escas <- as.data.frame(matrix(ncol=length(scales), nrow=nrow(dad)))
+  
+   for (k in 1:length(scales)){
+    scala <- scales[k]
+    xis <- c(0, cumsum(rep(scala, plot[[1]][1,2]/scala)))
+    yis <- c(0, cumsum(rep(scala, plot[[1]][2,2]/scala)))
+    
+    qxis <- qyis <- rep(NA, length=nrow(dad))
+    
+    for (i in 1:(length(xis)-1)){
+      for (n in 1:(length(yis)-1)){
+        qxis[dad$gx >= xis[i] & dad$gx <= xis[i+1]] <- xis[i]
+        qyis[dad$gy >= yis[n] & dad$gy <= yis[n+1]] <- yis[n] 
+      }
+    }
+    colnames(escas)[k] <- paste("quad", scala, sep="_")
+    escas[,k] <- paste(qxis, qyis, sep="_")
+    escas[grep("NA", escas[,k]),k] <- NA
+   }
+  mort[[g]] <- cbind(dad, escas)
+}
+```
+
+
+Summary mortality tables.
+
+**Mortality rate is $m_a$ sensu Kohyama et al. 2018**
+
+$$m_a = 1 - \left(\frac{N_{ST}}{N_0}\right)^\frac{1}{T}$$
+
+$N_0$ number of alive individuals initial census  
+$N_ST$ individuals that survived from the intial to the final census  
+$T$ time interval in years  
+
+```{r}
+map_df(mort,  function(x){
+  y <-  data.frame(Nsp = length(unique(x$sp)), 
+              N_0 = nrow(x),
+              N_dead = sum(x$dead), 
+              N_ST = nrow(x)-sum(x$dead),
+              mean_T = as.numeric(mean(x$interval, na.rm=T))/365)
+  y$mort.rate <- 1 - (y$N_ST/y$N_0)^(1/y$mean_T)
+  return(y)
+}, .id="time") %>% kable()
+```
+
+**OBS**: mean time interval in years between census **for all individuals**
+
+
+Saving mort data object.
+```{r}
+file <- paste0(here("workflow_example", "bci_cleandata"), "/mortality.rds")
+saveRDS(mort, file=file)
+```
+
+# 4. Recruitment 
+
+1. Remove trees with NA in species names, ferns and palms, and with NA in the final date.
+
+2. - Selecting only the individuals that were alive in final census (status "A") and alive or recruits in the first census ("A", "P").
+
+3. Removing individuals with <10mm DHB in the first census for the alive individuals and in the second census for the priors only for the priors (final census).
+
+4. Create a column to identify if the tree is alive (0) or recruit (1)
+
+```{r}
+rec <- list()
+for (i in 1:(n.census-1)){
+  first <- tree[[i]]
+  second <- tree[[i+1]] %>% dplyr::select(-sp, -gx, -gy)
+  df <- inner_join(first, second, by=c("treeID"), 
+                   suffix= c(".i", ".f"))
+  df <- df %>% filter(status.f =="A",
+                      status.i %in% c("A","P")) 
+  df <- df %>% filter(dbh.i >=10 | is.na(dbh.i)) %>%
+               filter(status.i != "P" | dbh.f >=10)
+
+  df$interval <- df$date.f - df$date.i
+  df$rec <- ifelse(df$status.i == 'P', 1, 0)
+  
+  # ferns & palms
+  df <- df %>% filter(!is.na(sp), sp %in% species$sp[species$fern.palm == "FALSE"])
+  
+  df <- df %>% filter(!is.na(date.f)) # excluding NA in final date
+  
+  rec[[i]] <- df
+}
+```
+
+Including Quadrat scales columns.
+```{r}
+scales <- c(5,10,20,50,100)
+for (g in 1:(n.census-1)) {
+  dad <- rec[[g]]
+  
+  escas <- as.data.frame(matrix(ncol=length(scales), nrow=nrow(dad)))
+  
+   for (k in 1:length(scales)){
+    scala <- scales[k]
+    xis <- c(0, cumsum(rep(scala, plot[[1]][1,2]/scala)))
+    yis <- c(0, cumsum(rep(scala, plot[[1]][2,2]/scala)))
+    
+    qxis <- qyis <- rep(NA, length=nrow(dad))
+    
+    for (i in 1:(length(xis)-1)){
+      for (n in 1:(length(yis)-1)){
+        qxis[dad$gx >= xis[i] & dad$gx <= xis[i+1]] <- xis[i]
+        qyis[dad$gy >= yis[n] & dad$gy <= yis[n+1]] <- yis[n] 
+      }
+    }
+    colnames(escas)[k] <- paste("quad", scala, sep="_")
+    escas[,k] <- paste(qxis, qyis, sep="_")
+    escas[grep("NA", escas[,k]),k] <- NA
+   }
+  rec[[g]] <- cbind(dad, escas)
+}
+```
+
+
+Summary recruitment tables
+
+**recruitment rate is $r_af$ sensu Kohyama et al. 2018:**
+
+$$r_{af} = 1 - \left(\frac{N_{ST}}{N_T}\right)^\frac{1}{T}$$
+
+$N_T$ total of alive individuals in the final census  
+$N_ST$ individuals that survived from the intial to the final census  
+$T$ time interval in years  
+
+```{r}
+map_df(rec,  function(x){
+  y <-  data.frame(Nsp = length(unique(x$sp)), 
+              N_T = nrow(x),
+              N_recruits = sum(x$rec), 
+              N_ST = nrow(x)-sum(x$rec),
+              mean_T = as.numeric(mean(x$interval, na.rm=T))/365)
+  y$rec.rate <- 1 - (y$N_ST/y$N_T)^(1/y$mean_T)
+  return(y)
+}, .id="time") %>% kable()
+```
+
+**OBS**: mean time interval in years between census **for the individuals that survived**
+
+Saving recruitment data object.
+```{r}
+file <- paste0(here("workflow_example", "bci_cleandata"), "/recruitment.rds")
+saveRDS(rec, file=file)
+```

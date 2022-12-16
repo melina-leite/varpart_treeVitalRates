@@ -1,0 +1,601 @@
+---
+title: "RESULTS excluding rare and separating species by groups"
+author: "Melina Leite"
+date: "`r  Sys.Date()`"
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "..") })
+output:
+  rmdformats::readthedown:
+    highlight: kate
+    self_contained: true
+    thumbnails: false
+    lightbox: true
+    gallery: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = T, warning = F, fig.align = "center", message = F,
+  error = F, cache = F, cache.lazy = FALSE)
+
+library(knitr)
+library(tidyverse); library(cowplot); library(patchwork); library(ggrepel)
+theme_set(theme_cowplot())
+library(ggbeeswarm)
+library(here)
+```
+
+Running models with different datasets:
+
+- **all**: original data, all species all individuals
+
+- **exclude**: exclude rare species
+
+- **regroup**: regrouping observations of rare species in ONE species group
+
+Using only the **5x5 m quadrat scale**
+
+
+```{r run}
+#Figures colors/labels
+cores <- c( quadrat =  "#c00000", 
+           `sp:time`= "#203864",
+            time = "#ed7d31",
+           `quadrat:time` = "#843c0c", 
+           `quadrat:sp`= "#b666d2", 
+            sp = "#70ad47", 
+            Residual="#ffc000")
+
+labvit <- as_labeller(c(grow = "Growth", mort="Mortality", 
+                        rec="Recruitment"))
+grpTlab = as_labeller(c(quadrat = "space", `sp:time`="species x time", 
+                        `quadrat:time`="space x time", `quadrat:sp`= "species x space",
+                        sp="species", Residual = "residual",
+                        time= "time"))
+grpvitT <- as_labeller(c(grow = "Growth", mort="Mortality", 
+                         rec="Recruitment",
+                        quadrat = "space", `sp:time`="species*time", 
+                         `quadrat:time`="space*time", `quadrat:sp`= "species*space",
+                         sp="species", Residual = "residual",
+                        time= "time"))
+labplot = as_labeller(c(quadrat = "space", 
+                        `sp:time`="species x time",
+                        `quadrat:time`="space x time", 
+                        `quadrat:sp`= "species x space",
+                        sp="species", 
+                        Residual = "residual",
+                        time= "time",
+                fus="Fushan", luq = "Luquillo", lam="Lambir", 
+                pas = "Pasoh", bci="Barro Colorado"))
+```
+
+# Data
+
+
+Growth
+```{r}
+grp <- c("all","exclude","regroup")
+path1 = here("models_outputs/models_time/")
+tudo <- list()
+for (i in 1:length(grp)){
+  path <- paste0(path1, grp[i], "/grow/table")
+  files = list.files(path)
+  # excluding wyw
+  files = files[grep("wyw", files, invert = T)]
+  all <-  lapply(files, function(x) get(assign(x, load(paste0(path, "/", x)))))
+  names(all) <- substr(files,1,nchar(files)-6)
+  tudo[[i]] <- all
+}
+names(tudo) <- grp
+tes <- map(tudo,bind_rows, .id="id") %>% bind_rows() %>% filter(q_size=="quad_5")
+
+#tes %>% count(data,fplot) %>% mutate(n=n/8)
+table(tes$data,tes$fplot)/8
+
+#remove intercept to include again as a separate column
+intercepts <- tes %>% filter(term == "intercept")
+names(intercepts)[9] = "intercept"
+
+grow <- tes %>% filter(term != "intercept") %>%
+  left_join(intercepts[,c(1:4,9)], by= c("id", "sub","data", "fplot")) %>%
+  group_by(id, sub, data, fplot) %>% 
+  mutate(VPC = variance/sum(variance))  %>% ungroup() %>%
+  mutate(term = fct_relevel(term,"time", "quadrat", "sp:time", "quadrat:time",
+                            "quadrat:sp", "sp", "Residual")) %>%
+  as.data.frame()
+
+# divide the sd of the terms by the mean growth (intercept) for each dataset.
+grow$stdev = grow$Estimate/grow$intercept
+```
+
+Mort
+```{r}
+tudo <- list()
+for (i in 1:length(grp)){
+  path <- paste0(path1,grp[i], "/mort/table")
+  files = list.files(path)  # excluding wyw
+  files = files[grep("wyw", files, invert = T)]
+  all <-  lapply(files, function(x) get(assign(x, load(paste0(path, "/", x)))))
+  names(all) <- substr(files,1,nchar(files)-6)
+  tudo[[i]] <- all
+}
+names(tudo) <- grp
+tes <- map(tudo,bind_rows, .id="id") %>% bind_rows() %>% filter(q_size=="quad_5")
+
+#tes %>% count(data,fplot) %>% mutate(n=n/8)
+table(tes$data,tes$fplot)/8
+
+#remove intercept to include again as a separate column
+intercepts <- tes %>% filter(term == "intercept")
+names(intercepts)[9] = "intercept"
+
+mort <- tes %>% filter(term != "intercept") %>%
+  left_join(intercepts[,c(1:4,9)], by= c("id", "sub","data", "fplot")) %>%
+  group_by(id, sub, data, fplot) %>% 
+  mutate(VPC = variance/sum(variance))  %>% ungroup() %>%
+  mutate(term = fct_relevel(term,"time", "quadrat", "sp:time", "quadrat:time",
+                            "quadrat:sp", "sp", "Residual")) %>%
+  as.data.frame()
+mort$stdev <- mort$Estimate
+```
+
+
+Rec
+```{r}
+tudo <- list()
+for (i in 1:length(grp)){
+  path <- paste0(path1, grp[i], "/rec/table")
+  files = list.files(path)  # excluding wyw
+  files = files[grep("wyw", files, invert = T)]
+  all <-  lapply(files, function(x) get(assign(x, load(paste0(path, "/", x)))))
+  names(all) <- substr(files,1,nchar(files)-6)
+  tudo[[i]] <- all
+}
+names(tudo) <- grp
+tes <- map(tudo,bind_rows, .id="id") %>% bind_rows() %>% filter(q_size=="quad_5")
+
+#tes %>% count(data,fplot) %>% mutate(n=n/8)
+table(tes$data,tes$fplot)/8
+
+#remove intercept to include again as a separate column
+intercepts <- tes %>% filter(term == "intercept")
+names(intercepts)[9] = "intercept"
+
+rec <- tes %>% filter(term != "intercept") %>%
+  left_join(intercepts[,c(1:4,9)], by= c("id", "sub","data", "fplot")) %>%
+  group_by(id, sub, data, fplot) %>% 
+  mutate(VPC = variance/sum(variance))  %>% ungroup() %>%
+  mutate(term = fct_relevel(term,"time", "quadrat", "sp:time", "quadrat:time",
+                            "quadrat:sp", "sp", "Residual")) %>%
+  as.data.frame()
+rec$stdev <- rec$Estimate
+```
+
+
+Combining all results and taking the mean stdev and VPC among subsamples
+
+**NOT taking into account the same dataset (sub)**
+
+```{r}
+comb <- bind_rows(list(grow=grow, mort=mort, rec=rec), .id="vital") %>%
+  mutate(term = fct_relevel(term, "quadrat", "sp:time","time", "quadrat:time", 
+                            "quadrat:sp", "sp","Residual")) %>%
+  ungroup() %>%
+  mutate(data = fct_relevel(data, "all","regroup", "exclude"))
+mcomb <- comb %>% group_by(vital,data,fplot,q_size,term) %>%
+  summarise(stdev = mean(stdev),
+            VPC = mean(VPC),
+            richness = round(mean(richness)))  %>%
+  filter(q_size == "quad_5")
+```
+
+number of fplots with results
+```{r}
+table(mcomb$vital, mcomb$data)/7
+```
+
+INCLUDING THE % of rare species
+
+```{r}
+load(here("data/rare_species.Rdata"))
+
+comb <- comb %>% left_join(rare, by="fplot")
+mcomb <- mcomb %>% left_join(rare, by="fplot")
+```
+
+
+# Comparing groups
+
+
+```{r}
+mcomb %>%
+  ggplot(aes(x=data, y=VPC)) +geom_col(aes(fill=term, color=term), alpha=0.7) +
+  scale_fill_manual(values=cores) +
+  scale_color_manual(values=cores) +
+  facet_grid(vital~fplot) +
+  theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+
+```{r,fig.height=8, fig.width=10}
+fig <- comb %>% filter(vital=="grow") %>%
+  ggplot(aes(x=data, y=VPC, col=term)) + 
+  geom_quasirandom(alpha=0.5, groupOnX = TRUE) +
+  facet_grid(fplot~term, labeller=labplot) +
+  stat_summary(fun=median, size=0.3, fatten=1,col="black",
+                         geom="crossbar", width=0.7)+
+  scale_color_manual(values = cores) +
+    xlab("") +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45,hjust=1)) +
+  labs(title= "VPC per subsample of 5ha - GROWTH")
+fig
+```
+
+```{r,fig.height=8, fig.width=10}
+fig <- comb %>% filter(vital=="mort") %>%
+  ggplot(aes(x=data, y=VPC, col=term)) + 
+  geom_quasirandom(alpha=0.5, groupOnX = TRUE) +
+  facet_grid(fplot~term, labeller=labplot) +
+  stat_summary(fun=median, size=0.3, fatten=1,col="black",
+                         geom="crossbar", width=0.7)+
+  scale_color_manual(values = cores) +
+    xlab("") +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45,hjust=1)) +
+  labs(title= "VPC per subsample of 5ha - MORT")
+fig
+```
+
+```{r,fig.height=8, fig.width=10}
+fig <- comb %>% filter(vital=="rec") %>%
+  ggplot(aes(x=data, y=VPC, col=term)) + 
+  geom_quasirandom(alpha=0.5, groupOnX = TRUE) +
+  facet_grid(fplot~term, labeller=labplot) +
+  stat_summary(fun=median, size=0.3, fatten=1,col="black",
+                         geom="crossbar", width=0.7)+
+  scale_color_manual(values = cores) +
+    xlab("") +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45,hjust=1)) +
+  labs(title= "VPC per subsample of 5ha - REC")
+fig
+```
+
+
+
+
+
+mean over fplots
+```{r}
+mcomb %>% group_by(vital,data,term) %>% summarise(VPC=mean(VPC)) %>%
+  ggplot(aes(x=data, y=VPC)) +geom_col(aes(fill=term, color=term), alpha=0.7) +
+  scale_fill_manual(values=cores) +
+  scale_color_manual(values=cores) +
+  facet_grid(~vital)+
+  theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+
+
+```{r, fig.height=8}
+comb %>%
+  ggplot(aes(x=data,y=VPC, col=data)) + geom_boxplot()+
+  facet_grid(vital~term) +
+  theme(axis.text.x = element_text(angle=45,hjust=1),
+        legend.position = "none")
+```
+
+```{r, eval=F}
+mcomb %>% mutate(xis = as.numeric(data)) %>%
+  ggplot(aes(x=xis,y=stdev, col=fplot)) + geom_line() +
+  facet_grid(vital~term, scales = "free") + 
+  scale_x_continuous(breaks = 1:3, labels=levels(mcomb$data),
+                     name="") +
+  theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+
+## USING the same dataset for the comparisons
+
+It means, for each forest, linking the same subsampled data used 
+
+```{r}
+fig <- comb %>% filter(vital=="grow") %>%
+  ggplot(aes(x=as.numeric(as.factor(data)), y=VPC, col=sub)) + 
+  geom_line() +
+  facet_grid(fplot~term, labeller=labplot) +
+  scale_x_continuous(breaks=1:3, labels=levels(comb$data))+
+    xlab("") +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45,hjust=1)) +
+  labs(title= "VPC per subsample of 5ha - GROW")
+fig
+```
+
+```{r}
+fig <- comb %>% filter(vital=="mort") %>%
+  ggplot(aes(x=as.numeric(as.factor(data)), y=VPC, col=sub)) + 
+  geom_line() +
+  facet_grid(fplot~term, labeller=labplot) +
+  scale_x_continuous(breaks=1:3, labels=levels(comb$data))+
+    xlab("") +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45,hjust=1)) +
+  labs(title= "VPC per subsample of 5ha - mort")
+fig
+```
+
+
+```{r}
+fig <- comb %>% filter(vital=="rec") %>%
+  ggplot(aes(x=as.numeric(as.factor(data)), y=VPC, col=sub)) + 
+  geom_line() +
+  facet_grid(fplot~term, labeller=labplot) +
+  scale_x_continuous(breaks=1:3, labels=levels(comb$data))+
+    xlab("") +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45,hjust=1)) +
+  labs(title= "VPC per subsample of 5ha - rec")
+fig
+
+```
+
+ 
+
+
+```{r}
+labplot2 = as_labeller(c(grow = "Growth", mort="Mortality", 
+                        rec="Recruitment",
+                fus="Fushan", luq = "Luquillo", lam="Lambir", 
+                pas = "Pasoh", bci="Barro Colorado")) 
+fg <- mcomb %>% filter(data %in% c("all", "exclude", "regroup")) %>% 
+    mutate(data = fct_relevel(data, "all", "exclude", "regroup")) %>%
+  ggplot(aes(x=data, y=VPC)) +
+  geom_col(aes(fill=term, color=term), alpha=0.7) +
+  scale_fill_manual(values=cores,labels=
+                       c("Space","Species x time", "Time", "Space x time", "Species x Space","Species","Residual")) +
+  scale_color_manual(values=cores, labels=
+                       c("Space","Species x time", "Time", "Space x time", "Species x Space","Species","Residual")) +
+  
+  facet_grid(fplot~vital, labeller = labplot2) +
+  theme(axis.text.x = element_text(angle=45, hjust=1))
+fg
+# png("figs/exclude_regroup_rare_VPC_time_bar2.png", height = 800, width=800, res=100)
+# fg
+# dev.off()
+```
+
+```{r}
+mcomb %>% filter(data %in% c("all", "exclude", "regroup")) %>% 
+  mutate(x=as.factor(data)) %>% mutate(x= as.numeric(x)) %>%
+ggplot(aes(x=x, y=stdev, col=fplot)) + geom_line() +
+  facet_grid(vital~term, scales="free") +
+  scale_x_continuous(breaks = 1:3, labels=c("all","regroup", "exclude"),
+                     name="")+
+  theme(axis.text.x = element_text(angle=45, hjust=1),
+        legend.position = "right") +
+  ggtitle("SD")
+```
+
+```{r, fig.height=8}
+mcomb %>% filter(data %in% c("all","regroup", "exclude")) %>% 
+  mutate(x=as.factor(data)) %>% mutate(x= as.numeric(x)) %>%
+ggplot(aes(x=data, y=stdev, col=data)) + geom_boxplot() +
+  facet_grid(vital~term, scales="free") +
+  theme(axis.text.x = element_text(angle=45, hjust=1),
+        legend.position = "none") +
+  ggtitle("SD")
+```
+
+```{r, fig.height=8}
+mcomb %>% filter(data %in% c("all","regroup", "exclude")) %>% 
+  mutate(x=as.factor(data)) %>% mutate(x= as.numeric(x)) %>%
+ggplot(aes(x=x, y=VPC, col=fplot)) + geom_line() +
+  facet_grid(vital~term, scales="free") +
+  scale_x_continuous(breaks = 1:3, labels=c("all","regroup", "exclude"),
+                     name="")+
+  theme(axis.text.x = element_text(angle=45, hjust=1),
+        legend.position = "right") +
+  ggtitle("VPC")
+```
+
+```{r, fig.height=8}
+mcomb %>% filter(data %in% c("all","regroup", "exclude")) %>% 
+  mutate(x=as.factor(data)) %>% mutate(x= as.numeric(x)) %>%
+ggplot(aes(x=data, y=VPC, col=data)) + geom_boxplot() +
+  facet_grid(vital~term, scales="free") +
+  theme(axis.text.x = element_text(angle=45, hjust=1),
+        legend.position = "none") +
+  ggtitle("VPC")
+```
+
+## Difference to all data 
+
+### Absolute difference
+
+```{r}
+dif <- mcomb %>% filter(data %in% c("all","regroup", "exclude")) %>%
+  mutate(data = fct_relevel(data, "all", "exclude", "regroup")) %>%
+  pivot_wider(id_cols = c(vital,fplot,term, p.rare),
+                      names_from = data,
+                      values_from = c(stdev,VPC, richness)) %>%
+  mutate(stdev_difr.regroup = stdev_regroup - stdev_all,
+         stdev_difr.exclude = stdev_exclude - stdev_all,
+         VPC_difr.regroup   = VPC_regroup - VPC_all,
+         VPC_difr.exclude   = VPC_exclude - VPC_all,
+         prop.rare.sp = (richness_exclude/richness_all)) %>%
+  select(1:4,14:18) %>%
+  pivot_longer(5:8,  names_to = c(".value", "group"),
+   names_pattern = "(.*)_(.*)") %>%
+  mutate(group = substr(group,5,nchar(group)))
+```
+
+```{r, fig.height=6, fig.width=8}
+dif %>%
+  ggplot(aes(x=group, y=stdev)) + 
+  facet_grid(vital~term, scales= "free_x") +
+  geom_boxplot() +
+  geom_quasirandom(aes(col=fplot)) +
+  ylab("SD group - SD all") + xlab("") +
+  geom_hline(yintercept = 0, linetype= "dotted")  +
+  ggtitle("Absolute difference in SD") +
+  theme(legend.position = "bottom",
+         panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45, hjust=1))
+```
+
+```{r, fig.height=6, fig.width=8}
+dif %>%
+  ggplot(aes(x=group, y=VPC)) + 
+  facet_grid(vital~term, scales= "free_x") +
+  geom_boxplot(outlier.alpha = 0) +
+  geom_quasirandom(aes(col=fplot)) +
+  ylab("VPC group - VPC all") + xlab("") +
+  geom_hline(yintercept = 0, linetype= "dotted")  +
+  ggtitle("Absolute difference in VPC") +
+  theme(legend.position = "bottom",
+         panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45, hjust=1))
+```
+
+```{r}
+resdif <- dif %>% group_by(vital, term, group) %>% summarise(mean=mean(VPC, na.rm=T)) %>%
+  pivot_wider(names_from = term, values_from = mean)
+```
+
+### Relative differences in SD to all data
+
+(group value - all data value)*100 /  all data value
+
+```{r}
+difr <- mcomb %>% filter(data %in% c("all","regroup", "exclude")) %>%
+  mutate(data = fct_relevel(data, "all", "exclude", "regroup")) %>%
+  pivot_wider(id_cols = c(vital,fplot,term, p.rare),
+                      names_from = data,
+                      values_from = c(stdev,VPC, richness)) %>%
+  mutate(stdev_difr.regroup = (stdev_regroup - stdev_all)*100/stdev_all,
+         stdev_difr.exclude = (stdev_exclude - stdev_all)*100/stdev_all,
+         VPC_difr.regroup   = (VPC_regroup - VPC_all)*100/VPC_all,
+         VPC_difr.exclude   = (VPC_exclude - VPC_all)*100/VPC_all,
+         prop.rare.sp = (richness_exclude/richness_all)) %>%
+  select(1:4,14:18) %>%
+  pivot_longer(5:8,  names_to = c(".value", "group"),
+   names_pattern = "(.*)_(.*)") %>%
+  mutate(group = substr(group,5,nchar(group)))
+```
+
+```{r, fig.height=8, fig.width=8}
+difr %>%
+  ggplot(aes(x=group, y=stdev)) + 
+  facet_grid(vital~term, scales= "free_x") +
+  geom_boxplot() +
+  geom_quasirandom(aes(col=fplot)) +
+  ylab("SD proportional diference (%)") + xlab("") +
+  geom_hline(yintercept = 0, linetype= "dotted")  +
+  ggtitle("Relative difference in SD") +
+  theme(legend.position = "bottom",
+         panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45, hjust=1))
+```
+
+
+
+```{r}
+resdifr <- difr %>% group_by(vital, term, group) %>% summarise(mean=mean(stdev, na.rm=T)) %>%
+  pivot_wider(names_from = term, values_from = mean)
+resdifr %>%  kable(digits = 2)
+```
+Relative differences in SD
+```{r}
+difr %>% group_by(vital, term, group) %>% summarise(mean=mean(stdev, na.rm=T)) %>%
+  pivot_wider(names_from = c(vital,group), values_from = mean) %>%
+  kable(digits=1)
+```
+Absolute differences in VPC
+```{r}
+dif %>% group_by(vital, term, group) %>% summarise(mean=mean(VPC, na.rm=T)) %>%
+  pivot_wider(names_from = c(vital,group), values_from = mean) %>%
+  kable(digits=3)
+```
+
+
+## Comparing with Proportion of rare species
+
+```{r, fig.height=6, fig.width=12}
+dif %>%
+  ggplot(aes(x=p.rare, y=stdev, linetype=group)) + 
+  geom_point(aes(col=fplot)) + 
+  geom_smooth(method="lm", se=F) +
+  facet_grid(vital~term) +
+  ylab("Difference in SD to original data") +
+  xlab("Prop of rare species") +
+  geom_hline(yintercept = 0, linetype= "dotted")  +
+  ggtitle("Difference in SD") +
+  theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+
+```{r, fig.height=6, fig.width=12}
+difr %>%
+  ggplot(aes(x=p.rare, y=stdev, linetype=group)) + 
+  geom_point(aes(col=fplot)) + 
+  geom_smooth(method="lm", se=F) +
+  facet_grid(vital~term) +
+  ylab("Proportional difference in SD to original data") +
+  xlab("Proportion of rare species") +
+  geom_hline(yintercept = 0, linetype= "dotted")  +
+  ggtitle("Relative difference in SD") +
+  theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+
+
+```{r, fig.height=8, fig.width=12}
+grpvitT <- as_labeller(c(grow = "Growth", mort="Mortality", 
+                         rec="Recruitment",
+                        quadrat = "Space", `sp:time`="Species x Time", 
+                         `quadrat:time`="Space x Time", `quadrat:sp`= "Species x Space",
+                         sp="Species", Residual = "Residual",
+                        time= "Time"))
+pm <- dif %>%
+  ggplot(aes(x=p.rare, y=VPC)) + 
+  geom_point(aes(col=fplot, shape=group), size=3) + 
+  facet_grid(vital~term, labeller = grpvitT) +
+  scale_x_continuous(breaks=c(50,55,60,65)) +
+  scale_color_discrete(labels=c("Barro Colorado", "Fushan",
+                                "Lambir", "Luquillo", "Pasoh"))+
+  ylab("Difference in VPC to original data") +
+  xlab("Proportion of rare species (%)") +
+  geom_hline(yintercept = 0, linetype= "dotted")  +
+  theme(legend.position="bottom",
+         panel.spacing.y = unit(0.8, "cm"),
+         panel.background = element_rect(fill="white", color="black"))+
+  labs(tag="b)")
+pm
+# png("figs/FIG_S4.3b_exclude_regroup_rare_VPC_time.png", height = 600, width=1010, res=100)
+# pm
+# dev.off()
+```
+
+```{r, fig.height=8, fig.width=12}
+pmr <- difr %>%
+  ggplot(aes(x=p.rare, y=stdev)) + 
+  geom_point(aes(col=fplot, shape=group), size=3) + 
+  facet_grid(vital~term, labeller = grpvitT) +
+  scale_x_continuous(breaks=c(64,68,72)) +
+  scale_color_discrete(labels=c("Barro Colorado", "Fushan",
+                                "Lambir", "Luquillo", "Pasoh"))+
+  ylab("Proportional difference in SD to original data") +
+  xlab("Proportion of rare species (%)") +
+  geom_hline(yintercept = 0, linetype= "dotted")  +
+  theme(legend.position="bottom",
+         panel.spacing.y = unit(0.8, "cm"),
+          panel.background = element_rect(colour="lightgray"))
+pmr
+# png("figs/exclude_regroup_rare_SD_time_relativeDIFF.png", height = 600, width=1010, res=100)
+# pmr
+# dev.off()
+```
+

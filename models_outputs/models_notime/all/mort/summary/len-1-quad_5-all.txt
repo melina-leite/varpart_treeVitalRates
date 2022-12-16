@@ -1,0 +1,28 @@
+ Family: bernoulli 
+  Links: mu = cloglog 
+Formula: dead ~ 1 + (1 | quadrat) + (1 | sp) + (1 | quadrat:sp) + offset(log(y.interval)) 
+   Data: data (Number of observations: 133712) 
+Samples: 2 chains, each with iter = 3000; warmup = 1000; thin = 5;
+         total post-warmup samples = 800
+
+Group-Level Effects: 
+~quadrat (Number of levels: 7999) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+sd(Intercept)     0.51      0.02     0.47     0.55 1.00      501      677
+
+~quadrat:sp (Number of levels: 59670) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+sd(Intercept)     0.70      0.02     0.65     0.75 1.00      418      619
+
+~sp (Number of levels: 380) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+sd(Intercept)     0.95      0.05     0.84     1.08 1.00      498      731
+
+Population-Level Effects: 
+          Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+Intercept    -4.36      0.07    -4.49    -4.23 1.00      401      566
+
+Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+and Tail_ESS are effective sample size measures, and Rhat is the potential
+scale reduction factor on split chains (at convergence, Rhat = 1).
+

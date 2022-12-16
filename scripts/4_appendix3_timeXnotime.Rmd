@@ -1,0 +1,186 @@
+---
+title: "Comparing results for TIME x NO-TIME models"
+author: "Melina Leite"
+date: "`r Sys.Date()`"
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "..") })
+output:
+  rmdformats::readthedown:
+    highlight: kate
+    self_contained: true
+    thumbnails: false
+    lightbox: true
+    gallery: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = T, warning = F, fig.align = "center", message = F,
+  error = F, cache = F, cache.lazy = FALSE)
+
+library(knitr)
+library(tidyverse); library(cowplot); library(patchwork); 
+theme_set(theme_cowplot())
+library(ggrepel); library(ggbeeswarm)
+library(janitor)
+library(here)
+#library(ggpattern); library(ambient)
+```
+
+
+Comparing results for the 5 plots with time and no time models
+
+```{r}
+#setting colors
+coresT <- c( "#ed7d31", "#203864", "#843c0c","#c00000", "#b666d2", "#70ad47", "#ffc000")
+labvit <- as_labeller(c(grow = "Growth", mort="Mortality", 
+                        rec="Recruitment"))
+grpTlab = as_labeller(c(quadrat = "space", `sp:time`="species*time", 
+                        `quadrat:time`="space*time", `quadrat:sp`= "species*space",
+                        sp="species", Residual = "residual",
+                        time= "time"))
+grpvitT <- as_labeller(c(grow = "Growth", mort="Mortality", 
+                         rec="Recruitment",
+                        quadrat = "space", `sp:time`="species*time", 
+                         `quadrat:time`="space*time", `quadrat:sp`= "species*space",
+                         sp="species", Residual = "residual",
+                        time= "time"))
+```
+
+Datasets of models results
+```{r}
+load(here("models_outputs/all_results_notime.Rdata"))
+load(here("models_outputs/all_results_time.Rdata"))
+```
+
+
+
+Only 5x5 quadrat scale
+Selecting only bci, fus, lam, luq and pas
+```{r}
+notime <- mvital %>% filter(fplot %in% c("bci", "fus", "pas", "lam", "luq"),
+                        q_size == "5") 
+
+time <- mvitalT %>% filter(q_size == "5") 
+
+daf <- bind_rows(list(notime = notime, time = time), .id="model")  %>%
+  mutate(term = fct_relevel(term,"time", "sp:time", "quadrat:time","quadrat", 
+                            "quadrat:sp", "sp", "Residual"))
+```
+
+Standard deviation
+```{r, fig.height=8, fig.width=6}
+p <- ggplot(daf, aes(x=model, y=stdev, col=term, fill=term)) + 
+  geom_col(alpha=0.7)+
+  facet_grid(fplot~vital, scales="free") +
+  scale_fill_manual(values=coresT, labels=grpTlab) +
+  scale_color_manual(values=coresT, labels=grpTlab)
+p
+```
+
+```{r, fig.height=6, fig.width=8}
+p2 <- ggplot(daf, aes(x=model, y=stdev, col=term, fill=term)) + 
+  geom_col(alpha=0.7)+
+  facet_grid(vital~fplot, scales="free") +
+  scale_fill_manual(name="OP", values=coresT, labels=grpTlab) +
+  scale_color_manual(name="OP",values=coresT, labels=grpTlab) +
+  ylab("Standard deviation")
+p2
+jpeg(here("figures/FIG_S3.1_time_x_notime_comparingSD.jpeg"), width =1200, height=800, res=150)
+p2
+dev.off()
+```
+
+
+
+Standard Deviation
+```{r, fig.height=8, fig.width=10}
+p <- daf %>% filter(term %in% c("quadrat", "quadrat:sp", "sp")) %>% 
+  select(model, vital, term, fplot,q_size, stdev) %>%
+  pivot_wider(names_from = model, values_from = stdev) %>%
+  ggplot(aes(x=time, y=notime)) +
+  geom_point(aes(col=fplot)) +
+  facet_grid(vital~term) +
+  geom_abline(intercept=0,slope=1, linetype = "dotted") +
+    #geom_smooth(method="lm", se=F) +
+  xlab("Time models") +
+  ylab("No-time models") +
+  ggtitle("Standard deviations") +
+  theme(panel.background = element_rect(colour="lightgray"))
+p
+jpeg(here("figures/FIG_S3.2_time_x_notime_SD.jpeg"), width =1000, height=800, res=150)
+p
+dev.off()
+```
+
+VPC
+```{r, fig.height=8, fig.width=6}
+p <- ggplot(daf, aes(x=model, y=VPC, col=term, fill=term)) + 
+  geom_col(alpha=0.7)+
+  facet_grid(fplot~vital, scales="free") +
+  scale_fill_manual(values=coresT, labels=grpTlab) +
+  scale_color_manual(values=coresT, labels=grpTlab)
+p
+jpeg(here("figures/time_x_notime_comparingVPC.jpeg"), width =1000, height=1200, res=150)
+p
+dev.off()
+```
+
+```{r, fig.height=8, fig.width=10}
+p <- daf %>% dplyr::filter(term %in% c("quadrat", "quadrat:sp", "sp")) %>% 
+  select(model, VPC,vital, fplot, term) %>%
+  pivot_wider(names_from = model, values_from = VPC) %>%
+  ggplot(aes(x=time, y=notime)) +
+  geom_point(aes( col=fplot)) +
+  facet_grid(vital~term) +
+  geom_abline(intercept=0,slope=1, linetype = "dotted")+
+ # geom_smooth(method="lm", se=F) +
+  ggtitle("VPC time x no time") +
+  theme(panel.background = element_rect(colour="lightgray"))
+p
+```
+
+NO TIME ≈ TIME  
+space ≈ space + space:time + time  
+space:species ≈ space:species + time:species  
+
+
+```{r, fig.height=6, fig.width=10}
+daf %>% 
+  mutate(term = fct_recode(term,`quadrat:sp` = "sp:time", 
+                           quadrat = "time", 
+                           quadrat="quadrat:time")
+         ) %>%
+  filter(term %in% c("quadrat", "quadrat:sp")) %>%
+  group_by(model, vital, fplot, term) %>% summarise(VPC = sum(VPC))%>%
+  pivot_wider(names_from = model, values_from = VPC) %>%
+  ggplot(aes(x=time, y=notime, )) +
+  geom_point(aes(col=fplot)) +
+  facet_grid(term~vital) +
+  geom_abline(intercept=0,slope=1, linetype = "dotted")+
+  #geom_smooth(method="lm", se=F) +
+  ggtitle("VPC: quadrat (+quadrat:time + time) and quadrat:sp (+ time:sp)")
+```
+
+
+NO TIME ≈ TIME
+space ≈ space + space:time 
+space:species ≈ space:species + time:species
+
+
+```{r, fig.height=6, fig.width=10}
+daf %>% 
+  mutate(term = fct_recode(term,`quadrat:sp` = "sp:time",
+                           quadrat="quadrat:time")) %>%
+  filter(term %in% c("quadrat", "quadrat:sp")) %>%
+  group_by(model, vital, fplot, term) %>% summarise(VPC = sum(VPC))%>%
+  pivot_wider(names_from = model, values_from = VPC) %>%
+  ggplot(aes(x=time, y=notime, )) +
+  geom_point(aes(col=fplot)) +
+  facet_grid(term~vital) +
+  geom_abline(intercept=0,slope=1, linetype = "dotted")+
+ # geom_smooth(method="lm", se=F) +
+  ggtitle("VPC: quadrat (+quadrat:time) and quadrat:sp (+ time:sp)")
+
+```
+

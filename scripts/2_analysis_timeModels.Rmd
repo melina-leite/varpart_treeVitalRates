@@ -1,0 +1,489 @@
+---
+title: "Results TIME models SUBSAMPLING plots 5ha"
+author: "Melina Leite"
+date: "`r  Sys.Date()`"
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "..") })
+output:
+  rmdformats::readthedown:
+    highlight: kate
+    self_contained: true
+    thumbnails: false
+    lightbox: true
+    gallery: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = T, warning = F, fig.align = "center", message = F,
+  error = F, cache = F, cache.lazy = FALSE)
+
+library(knitr)
+library(tidyverse); library(cowplot); library(patchwork); 
+theme_set(theme_cowplot())
+library(ggrepel); library(ggbeeswarm)
+library(janitor)
+library(htmlTable)
+library(here)
+```
+
+# Data
+
+Organising all tables of models results for all6 forest plo in one object per vital rate, quadrat size scale.
+
+See table S1 for forest plot names.
+
+```{r run}
+# Pre-analysis
+#Figures colors/labels
+cores <- c( quadrat =  "#c00000", 
+           `sp:time`= "#203864",
+            time = "#ed7d31",
+           `quadrat:time` = "#843c0c", 
+           `quadrat:sp`= "#b666d2", 
+            sp = "#70ad47", 
+            Residual="#ffc000")
+
+labvit <- as_labeller(c(grow = "Growth", mort="Mortality", 
+                        rec="Recruitment"))
+grpTlab = as_labeller(c(quadrat = "Space", `sp:time`="Species x Time", 
+                        `quadrat:time`="Space x Time", `quadrat:sp`= "Species x Space",
+                        sp="Species", Residual = "Residual",
+                        time= "Time"))
+grpvitT <- as_labeller(c(grow = "Growth", mort="Mortality", 
+                         rec="Recruitment",
+                        quadrat = "Space", `sp:time`="Species x Time", 
+                         `quadrat:time`="Space x Time", `quadrat:sp`= "Species x Space",
+                         sp="Species", Residual = "Residual",
+                        time= "Time"))
+labplot = as_labeller(c(quadrat = "Space", `sp:time`="Species x Time", 
+                `quadrat:time`="Space x Time", `quadrat:sp`= "Species x Space",
+                        sp="Species", Residual = "Residual",
+                        time= "Time",
+                fus="Fushan", luq = "Luquillo", lam="Lambir", 
+                pas = "Pasoh", bci="Barro Colorado"))
+```
+
+
+## Growth
+
+Import results data to list  
+```{r}
+path = here("models_outputs/models_time/all", "grow", "table")
+files = list.files(path)
+ 
+all = lapply(files, function(x) get(assign(x, load(paste0(path, "/", x)))))
+
+tudo <- bind_rows(all)
+```
+
+Remove intercept to include again as a separate column
+```{r}
+intercepts <- tudo %>% filter(term == "intercept")
+names(intercepts)[8] = "intercept"
+
+growT <- tudo %>% filter(term != "intercept") %>%
+  left_join(intercepts[,c(1:4,8)], by= c("sub","data", "fplot", "q_size")) %>%
+  group_by(sub, data, fplot, q_size) %>% 
+  mutate(VPC = variance/sum(variance))  %>% ungroup() %>%
+  mutate(term = fct_relevel(term, "quadrat", "sp:time","time",
+                            "quadrat:time",
+                            "quadrat:sp", "sp", "Residual"),
+         q_size = fct_recode(q_size, `5`= "quad_5", `10`= "quad_10",
+                             `20`="quad_20",
+                            `50`="quad_50",  `100`="quad_100")) %>%
+  mutate(q_size = fct_relevel(q_size, "5","10", "20","50", "100")) %>%
+  as.data.frame()
+```
+
+Divide the sd of the terms by the mean growth (intercept) for each dataset.
+```{r}
+growT$stdev = growT$Estimate/growT$intercept
+```
+
+
+Number of growth models per florest plot and quadrat scale.
+```{r}
+table(growT$fplot, growT$q_size)/7
+```
+
+## Mortality
+
+Import results data to list
+```{r}
+path = here("models_outputs/models_time/all", "mort", "table")
+files = list.files(path)
+ 
+all = lapply(files, function(x) get(assign(x, load(paste0(path, "/", x)))))
+tudo <- bind_rows(all)
+```
+
+Remove intercept to include again as a separate column
+```{r}
+intercepts <- tudo %>% filter(term == "intercept")
+names(intercepts)[8] = "intercept"
+
+mortT <- tudo %>% filter(term != "intercept") %>%
+  left_join(intercepts[,c(1:4,8)], by= c("sub","data", "fplot", "q_size")) %>%
+  group_by(sub,data, fplot, q_size) %>% 
+  mutate(VPC = variance/sum(variance))  %>% ungroup() %>%
+   mutate(term = fct_relevel(term,"quadrat", "sp:time","time",  "quadrat:time",
+                            "quadrat:sp", "sp", "Residual"),
+         q_size = fct_recode(q_size, `5`= "quad_5", `10`= "quad_10",
+                             `20`="quad_20",
+                            `50`="quad_50",  `100`="quad_100")) %>%
+  mutate(q_size = fct_relevel(q_size, "5","10", "20","50", "100")) %>%
+  as.data.frame()
+
+mortT$stdev <- mortT$Estimate
+```
+
+Number of mortality models per florest plot and quadrat scale.
+```{r}
+table(mortT$fplot, mortT$q_size)/7
+```
+
+## Recruitment
+
+Import results data to list   
+```{r}
+path = here("models_outputs/models_time/all", "rec", "table")
+files = list.files(path)
+ 
+all = lapply(files, function(x) get(assign(x, load(paste0(path, "/", x)))))
+
+tudo <- bind_rows(all)
+```
+
+Remove intercept to include again as a separate column
+```{r}
+intercepts <- tudo %>% filter(term == "intercept")
+names(intercepts)[8] = "intercept"
+
+recT <- tudo %>% filter(term != "intercept") %>%
+  left_join(intercepts[,c(1:4,8)], by= c("sub","data","fplot", "q_size")) %>%
+  group_by(sub,data, fplot, q_size) %>% 
+  mutate(VPC = variance/sum(variance))  %>% ungroup() %>%
+   mutate(term = fct_relevel(term,"quadrat", "sp:time", "time", "quadrat:time",
+                            "quadrat:sp", "sp", "Residual"),
+         q_size = fct_recode(q_size, `5`= "quad_5", `10`= "quad_10",
+                             `20`="quad_20", `50` = "quad_50",
+                             `100`="quad_100")) %>%
+  mutate(q_size = fct_relevel(q_size, "5","10", "20","50", "100")) %>%
+  as.data.frame()
+
+recT$stdev <- recT$Estimate
+```
+
+Number of recruitment models per florest plot and quadrat scale.
+```{r}
+table(recT$fplot, recT$q_size)/7
+```
+
+## combining rates
+
+All vital rates
+
+```{r vitalT r2}
+vitalT <- bind_rows(list(grow = growT, mort=mortT, rec=recT),.id="vital") 
+```
+
+To get ONE value per forest-vital, first I calculate the mean of the 10 medians of the posterior variances. Then I use this value as the Variance and take the VPC and R2.
+
+```{r mvitalT mr2}
+mvitalT <- vitalT %>% group_by(vital,data,fplot,q_size,term) %>%
+  summarise(variance = mean(variance),
+            stdev = mean(stdev)) %>%
+   mutate(VPC = variance/sum(variance)) %>%
+  mutate(term = fct_relevel(term, "quadrat", "sp:time","time", "quadrat:time", 
+                            "quadrat:sp", "sp","Residual"))
+
+mr2 <- mvitalT %>% filter(term != "Residual") %>%
+  group_by(vital, data,fplot,q_size) %>% 
+  summarise(r2 = sum(VPC))
+```
+
+Saving objects for models results
+```{r}
+save(mvitalT, vitalT, file= here("models_outputs", "all_results_time.Rdata"))
+```
+
+
+# All the 5ha subsampled plots
+
+## SDs
+
+```{r, fig.height=6, fig.width=10}
+fsd <- vitalT %>% filter(q_size == "5") %>%
+  ggplot(aes(x=fplot, y=stdev, col=term)) + 
+  geom_quasirandom(alpha=0.5, groupOnX = TRUE) +
+  facet_grid(vital~term) +
+  stat_summary(fun=median, size=0.3, fatten=1,col="black",
+                         geom="crossbar", width=0.7)+
+  scale_color_manual(values = cores) +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45,hjust=1)) +
+  labs(title= "SD per subsample of 5ha - 5x5 quadrat scale")
+fsd
+```
+
+```{r, fig.height=8, fig.width=10}
+vitalT %>% filter(vital=="grow") %>%
+  ggplot(aes(x=q_size, y=stdev, col=term)) + 
+  geom_quasirandom(alpha=0.5, groupOnX = TRUE) +
+  facet_grid(fplot~term, labeller=labplot) +
+  
+  stat_summary(fun=median, size=0.3, fatten=1,col="black",
+                         geom="crossbar", width=0.7)+
+  scale_color_manual(values = cores) +
+    xlab("Spatial scale") +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45,hjust=1)) +
+  labs(title= "SD per subsample of 5ha - GROWTH")
+```
+
+```{r, fig.height=8, fig.width=10}
+vitalT %>% filter(vital=="mort") %>%
+  ggplot(aes(x=q_size, y=stdev, col=term)) + 
+  geom_quasirandom(alpha=0.5, groupOnX = TRUE) +
+  facet_grid(fplot~term, labeller=labplot) +
+  
+  stat_summary(fun=median, size=0.3, fatten=1,col="black",
+                         geom="crossbar", width=0.7)+
+  scale_color_manual(values = cores) +
+    xlab("Spatial scale") +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45,hjust=1)) +
+  labs(title= "SD per subsample of 5ha - MORTALITY")
+```
+
+```{r, fig.height=8, fig.width=10}
+vitalT %>% filter(vital=="rec") %>%
+  ggplot(aes(x=q_size, y=stdev, col=term)) + 
+  geom_quasirandom(alpha=0.5, groupOnX = TRUE) +
+  facet_grid(fplot~term, labeller=labplot) +
+  
+  stat_summary(fun=median, size=0.3, fatten=1,col="black",
+                         geom="crossbar", width=0.7)+
+  scale_color_manual(values = cores) +
+    xlab("Spatial scale") +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45,hjust=1)) +
+  labs(title= "SD per subsample of 5ha - RECRUITMENT")
+```
+
+## VPCs
+
+```{r, fig.height=6, fig.width=10}
+fvpc <- vitalT %>% filter(q_size =="5") %>%
+  ggplot(aes(x=fplot, y=VPC, col=term)) + 
+  geom_quasirandom(alpha=0.5) +
+  facet_grid(vital~term, labeller= grpvitT ) +
+  stat_summary(fun=median, size=0.3, fatten=1,col="black",
+                         geom="crossbar", width=0.7)+
+  scale_color_manual(values = cores) +
+  theme(legend.position = "none",
+                panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45,hjust=1)) +
+  labs(title= "VPC per subsample of 5ha - 5x5")
+fvpc
+```
+
+```{r, fig.height=8, fig.width=10}
+fig <- vitalT %>% filter(vital=="grow") %>%
+  ggplot(aes(x=q_size, y=VPC, col=term)) + 
+  geom_quasirandom(alpha=0.5, groupOnX = TRUE) +
+  facet_grid(fplot~term, labeller=labplot) +
+  
+  stat_summary(fun=median, size=0.3, fatten=1,col="black",
+                         geom="crossbar", width=0.7)+
+  scale_color_manual(values = cores) +
+    xlab("Spatial scale") +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45,hjust=1)) +
+  labs(title= "VPC per subsample of 5ha - GROWTH")
+fig
+```
+
+```{r, fig.height=8, fig.width=10}
+fig <- vitalT %>% filter(vital=="mort") %>%
+  ggplot(aes(x=q_size, y=VPC, col=term)) + 
+  geom_quasirandom(alpha=0.5, groupOnX = TRUE) +
+  facet_grid(fplot~term, labeller=labplot) +
+  
+  stat_summary(fun=median, size=0.3, fatten=1,col="black",
+                         geom="crossbar", width=0.7)+
+  scale_color_manual(values = cores) +
+    xlab("Spatial scale") +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45,hjust=1)) +
+  labs(title= "VPC per subsample of 5ha - MORTALITY")
+fig
+```
+
+```{r, fig.height=8, fig.width=10}
+fig <- vitalT %>% filter(vital=="rec") %>%
+  ggplot(aes(x=q_size, y=VPC, col=term)) + 
+  geom_quasirandom(alpha=0.5, groupOnX = TRUE) +
+  facet_grid(fplot~term, labeller=labplot) +
+  
+  stat_summary(fun=median, size=0.3, fatten=1,col="black",
+                         geom="crossbar", width=0.7)+
+  scale_color_manual(values = cores) +
+    xlab("Spatial scale") +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour="lightgray"),
+        axis.text.x = element_text(angle=45,hjust=1)) +
+  labs(title= "VPC per subsample of 5ha - RECRUITMENT")
+fig
+```
+
+
+# Average per forest
+
+## SD stacked per forest
+
+5x5 m
+
+```{r}
+mvitalT %>% filter(q_size == "5") %>%
+ggplot(aes(x=fplot, y=stdev, fill=term, col=term))+
+  geom_col(alpha=0.7)+
+  scale_color_manual(values = cores) +
+  scale_fill_manual(values = cores)+
+  facet_grid(~vital)
+```
+
+## VPC per forest
+
+5x5 m
+
+```{r}
+ah <- mvitalT %>% filter(q_size == "5") %>% group_by(vital,term) %>%
+  summarise(VPC_mean = as.character(round(mean(VPC), 2))) %>%
+  mutate(x_val = as.numeric(VPC_mean), 
+         y_val = 0.6:6.8)
+ah[c(11,13),3] <-  c("0.10", "0.30")
+```
+
+```{r}
+pm<- mvitalT %>% filter(q_size == "5") %>%
+  ggplot(aes(y=rev(term), x=VPC)) +
+  facet_grid(~vital, labeller = grpvitT, scales="free_x") +
+  geom_jitter(size=5, alpha=0.5, aes(shape=fplot, fill=term), width = 0,
+              height = 0.15, col="black") +
+  stat_summary(fun=mean, fun.min=mean, fun.max=mean,
+               geom="crossbar", width=0.6, fatten=3) +
+  scale_fill_manual(name= "Forest", values=cores, guide ="none")+
+  scale_shape_manual(name="Forest",values=c(22,21,24,23,25), #c(15,16,17,18,8)
+                     labels= c("Barro Colorado", "Fushan", "Lambir","Luquillo",
+                               "Pasoh", "Wytham Woods")) +
+  geom_vline(xintercept=c(0,0.2,0.4,0.6), col='gray', linetype="dashed",
+             size=0.2) +
+  scale_y_discrete(labels=c("Residual", "Species", "Species x Space", 
+                                "Space x Time", "Time", "Species x Time",
+                                "Space"))+
+  theme(legend.position= "bottom",
+        plot.margin =  margin(0.1, 0.1, 0.1, 0, "cm"),
+        legend.background = element_rect(fill="gray95"),
+        panel.spacing.y = unit(0.8, "cm"),
+        panel.background = element_rect(colour="lightgray"),
+        text = element_text(size=16),
+        axis.text = element_text(size=14)) +
+  ylab("") + xlab("VPC") +
+  geom_text(data=ah, aes(x=x_val, y=rev(y_val), label=VPC_mean), hjust=0,
+            size=4)
+pm
+```
+
+```{r}
+mvitalT.sum <-  mvitalT %>% filter(q_size=="5") %>% ungroup()%>%
+  group_by(vital,term) %>%
+  summarise(meanVPC = mean(VPC),
+            sdVPC = sd(VPC)) %>%
+  pivot_wider(names_from = vital, values_from = c(meanVPC, sdVPC)) %>%
+  mutate_if(is.numeric, round, digits=2) %>%
+  select(term, meanVPC_grow, sdVPC_grow, meanVPC_mort, sdVPC_mort,
+         meanVPC_rec, sdVPC_rec)
+
+
+mvitalT.sum %>%
+  htmlTable(header=c("term" ,rep(c("Mean", "SD"), 3)),
+            cgroup = c("", "Growth", "Mortality", "Recruitment"),
+            n.cgroup =c(1,2,2,2))
+
+```
+
+# TOTAL VPC per vital rate 5x5
+
+To make the bar plots, first I sum all the variances per term and then calculate VPC from this sum
+
+```{r}
+tot.vpc.fig <- mvitalT %>% filter(q_size=="5") %>% ungroup()%>%
+  group_by(vital,term) %>%
+  summarise(sumVar =sum(variance)) %>%
+  mutate(VPC = sumVar/sum(sumVar)) %>%
+ggplot(aes(x=vital, fill=term, col=term, y=VPC)) + 
+  geom_col(alpha=0.7, width = 0.6) +
+  facet_grid(~vital, scales="free_x", labeller = labvit) +
+   xlab("") + ylab("Mean VPC") +
+    scale_fill_manual(values=cores, labels=grpTlab) +
+  scale_color_manual(values=cores, labels=grpTlab) +
+  theme(legend.position = "none",
+         panel.spacing.x = unit(0.01, "cm"),
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+            text = element_text(size=16),
+        axis.text = element_text(size=14))
+tot.vpc.fig
+```
+
+# FIGURE 2
+
+```{r fig2}
+pm +  labs(tag="(a)") +
+  theme( plot.margin =  margin(0.1, 0.1, 0.1, 0, "cm"),
+         plot.tag.position = c(0,0.93),
+         plot.tag = element_text(size=20, vjust = -0.6, hjust = -1)) +
+tot.vpc.fig + labs(tag="(b)") +
+    theme(plot.tag.position = c(0,0.93),
+         plot.tag = element_text(size=20, vjust = -0.6, hjust = 0.1)) +
+    plot_layout(widths = c(1,0.4))
+ggsave(here("figures","FIG_2.jpeg"), width=14, height=6)
+```
+
+# FIGURE 3 VCP bar all scales
+
+```{r}
+mvitalT %>% group_by(vital,q_size,term) %>%
+  summarise(sumVar =sum(variance)) %>%
+  group_by(vital,q_size)%>%
+  mutate(VPC = sumVar/sum(sumVar)) %>% select(-sumVar) %>%
+  pivot_wider(names_from =q_size, values_from = VPC) %>%
+  mutate_if(is.numeric, round, digits=2) %>%
+  htmlTable()
+```
+
+```{r}
+barvpc <- mvitalT %>% group_by(vital,q_size,term) %>%
+  summarise(sumVar =sum(variance)) %>%
+  group_by(vital,q_size)%>%
+  mutate(VPC = sumVar/sum(sumVar)) %>%
+  ggplot(aes(x=q_size, y=VPC, fill=term, col=term))+
+  geom_col(alpha=0.7)+
+  scale_color_manual(values = cores, labels=grpTlab) +
+  scale_fill_manual(values = cores, labels=grpTlab )+
+  facet_grid(~vital,labeller = grpvitT) +
+  xlab("Spatial grain (quadrat size)") +
+  ylab("VPC") + labs(tag="(b)")
+barvpc
+png(here("figures", "FIG_3_VPC_time_scales.png"), height = 550, width=1300, res=130)
+barvpc
+dev.off() 
+```

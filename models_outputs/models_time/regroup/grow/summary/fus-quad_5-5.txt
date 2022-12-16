@@ -1,0 +1,61 @@
+ Family: gaussian 
+  Links: mu = identity; sigma = identity 
+Formula: g.dbh ~ 1 + (1 | quadrat) + (1 | sp) + (1 | time) + (1 | quadrat:sp) + (1 | quadrat:time) + (1 | sp:time) 
+   Data: data (Number of observations: 45432) 
+Samples: 3 chains, each with iter = 3000; warmup = 1000; thin = 5;
+         total post-warmup samples = 1200
+
+Group-Level Effects: 
+~quadrat (Number of levels: 1969) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat
+sd(Intercept)     0.31      0.03     0.26     0.36 1.01
+              Bulk_ESS Tail_ESS
+sd(Intercept)      324      595
+
+~quadrat:sp (Number of levels: 11640) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat
+sd(Intercept)     1.13      0.01     1.11     1.16 1.00
+              Bulk_ESS Tail_ESS
+sd(Intercept)      791     1043
+
+~quadrat:time (Number of levels: 5760) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat
+sd(Intercept)     0.07      0.04     0.00     0.13 1.02
+              Bulk_ESS Tail_ESS
+sd(Intercept)      227      602
+
+~sp (Number of levels: 40) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat
+sd(Intercept)     0.74      0.09     0.58     0.95 1.00
+              Bulk_ESS Tail_ESS
+sd(Intercept)      906     1011
+
+~sp:time (Number of levels: 120) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat
+sd(Intercept)     0.23      0.03     0.19     0.29 1.00
+              Bulk_ESS Tail_ESS
+sd(Intercept)     1009     1095
+
+~time (Number of levels: 3) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat
+sd(Intercept)     0.36      0.25     0.12     1.71 1.00
+              Bulk_ESS Tail_ESS
+sd(Intercept)      931      927
+
+Population-Level Effects: 
+          Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS
+Intercept     1.16      0.26     0.34     1.85 1.00      553
+          Tail_ESS
+Intercept      853
+
+Family Specific Parameters: 
+      Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS
+sigma     1.42      0.01     1.41     1.43 1.00      917
+      Tail_ESS
+sigma     1092
+
+Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+and Tail_ESS are effective sample size measures, and Rhat is the potential
+scale reduction factor on split chains (at convergence, Rhat = 1).
+
+[1] "There were 20 divergent transitions after warmup. Increasing adapt_delta above 0.95 may help. See http://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup"

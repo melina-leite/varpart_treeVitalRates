@@ -1,0 +1,717 @@
+---
+title: "Modeling workflow for Barro Colorado Islands"
+subtitle: "Analysis from Leite et al. 2022"
+author: "Melina Leite"
+date: "`r Sys.Date()"
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "..") })
+output:
+  rmdformats::readthedown:
+    highlight: kate
+    self_contained: true
+    thumbnails: false
+    lightbox: true
+    gallery: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = T, warning = F, fig.align = "center", message = F,
+  error = F, cache = F, cache.lazy = FALSE)
+
+library(knitr)
+library(tidyverse); library(cowplot); library(patchwork); 
+theme_set(theme_cowplot())
+library(here)
+library(future.apply)
+library(brms)
+library(ggmcmc)
+```
+
+
+This script is part of the repository of analysis from **Leite et al. 2022. Major axe of variation in tree demography across global forests**.
+
+In this section, we will work with Barro Colorado Island (BCI) data as an example of the **modeling pipeline** used in the analysis of the 21 ForestGEO plots.
+
+For data cleaning/wrangling, please see the previous script `1_dataPreparation.Rmd`.
+
+For the example analyses, we used the 100 x 100 m (1ha) quadrat grain size, which is the fastest scale for models to run.
+
+# No-time/reduced models
+
+For the example of models without temporal organizing principles (reduced models), we use the last cenus interval (7).
+
+## 1. Growth reduced model
+
+Loading the cleaned data.
+```{r}
+df <- readRDS(here("workflow_example", "bci_cleandata", "growth.rds"))
+dad <- bind_rows(df, .id = "time")
+data <- dad[dad$time == 7, ]
+data$quadrat <- data[,colnames(data) == "quad_100"]
+```
+
+Models parameters.
+```{r}
+delta = 0.95
+ncores = 3 # number of chains
+iter = 3000 # number of iterations per chain
+warmup = 1000 # number of burning iterations discarded per chain
+thin = 5 # thinning interval
+```
+
+Model.
+```{r, eval=F}
+gm <- brm(g.dbh ~ 1 + (1|quadrat) + (1|sp) + (1|quadrat:sp), 
+              data=data, 
+              chains = ncores,
+              control = list(adapt_delta = delta),
+              cores = ncores,
+              iter = iter, warmup=warmup,
+              thin = thin, 
+              seed=T)
+save(gm, file = here("workflow_example", "bci_models_outputs","no_time_models",
+          "grow", "bci-7-quad_100-model.Rdata"))
+```
+
+It took more than 9 hours to run the model in a high performance cluster with parallel chains. I do not recommend you to run it in your personal computer. The model is already saved in the `bci_models_output` folder as an .Rdata file (>320MB):
+```{r load grow}
+load(here("workflow_example", "bci_models_outputs","no_time_models",
+          "grow", "bci-7-quad_100-model.Rdata"))
+```
+
+**Warning**: If you cloned this repository originally from [GitHub](https://github.com/melina-leite/varpart_treeVitalRates), and the chunk above doesn't work, it is probably because you need to instal [git large files storage (LFS)](https://git-lfs.github.com/) before cloning it in order to download the model's files correctly.
+
+
+Summary table with posterior medians.
+```{r}
+gmsum <- summary(gm, robust=T) # median posterior
+gmsum
+```
+
+Traceplots for the posterior distribution of parameters and chains mixture evaluation. Also saved as pdf A4 files.
+```{r trace grow}
+pdf(file=here("workflow_example", "bci_models_outputs","no_time_models",
+          "grow", "bci-7-quad_100-traceplot.pdf"), 
+    paper="a4", height = 20, width=10, onefile=F)
+plot(gm, ask=F, N=5)
+dev.off()
+```
+
+
+```{r}
+plot(gm, ask=F, N=5)
+```
+
+Table of model results.
+```{r}
+fix <- as.data.frame(gmsum$fixed)
+res <- as.data.frame(gmsum$spec_pars)
+quadrat <- as.data.frame(gmsum$random$quadrat)
+sp <- as.data.frame(gmsum$random$sp)
+quadrat.sp <- as.data.frame(gmsum$random$`quadrat:sp`)
+
+result <- bind_rows(list(intercept = fix, 
+             quadrat = quadrat,
+             sp = sp,
+             `quadrat:sp` = quadrat.sp,
+             Residual = res), .id="term")
+rownames(result) <- NULL
+
+result$levels = c(NA, gmsum$ngrps$quadrat[1],
+         gmsum$ngrps$sp[1],
+         gmsum$ngrps$`quadrat:sp`[1],
+         gmsum$nobs)
+result$variance <- result$Estimate^2
+
+sdtab <- data.frame(data = "all", 
+                  fplot = "bci",
+                  time = "7",
+                  q_size = "quad_100",
+                  ntrees = gmsum$nobs,
+                  richness = gmsum$ngrps$sp[1])
+sdtab <- sdtab[rep(seq_len(nrow(sdtab)), each = 5), ]
+rownames(sdtab) <- NULL
+
+res <- cbind(sdtab, result)
+kable(res, digits = 2)
+# saving table ------------
+save(res, file=here("workflow_example", "bci_models_outputs","no_time_models",
+          "grow", "bci-7-quad_100-table.Rdata"))
+```
+
+## 2. Mortality reduced model
+
+Loading the cleaned data.
+```{r}
+df <- readRDS(here("workflow_example", "bci_cleandata", "mortality.rds"))
+dad <- bind_rows(df, .id = "time")
+data <- dad[dad$time == 7, ]
+data$quadrat <- data[,colnames(data) == "quad_100"]
+```
+
+Models parameters.
+```{r}
+delta=0.95
+ncores = 3 # number of chains
+iter = 3000 # number of iterations per chain
+warmup = 1000 # number of burning iterations discarded per chain
+thin = 5 # thinning interval
+```
+
+Model.
+```{r, eval=F}
+gm <- brm(dead ~ 1 + (1|quadrat) + (1|sp) + (1|quadrat:sp) +
+                offset(log(y.interval)),
+              family = bernoulli(link="cloglog"),
+              data = data, 
+              chains = ncores,
+              control = list(adapt_delta = delta),
+              cores = ncores,
+	            iter = iter, warmup=warmup,
+              thin = thin)
+save(gm, file = here("workflow_example", "bci_models_outputs","no_time_models",
+          "mort", "bci-7-quad_100-model.Rdata"))
+```
+
+The model is already saved in the `bci_models_output` folder.
+```{r}
+load(here("workflow_example", "bci_models_outputs", "no_time_models",
+          "mort", "bci-7-quad_100-model.Rdata"))
+```
+
+Summary table with posterior medians.
+```{r}
+gmsum <- summary(gm, robust=T) # median posterior
+gmsum
+```
+
+Traceplots for the posterior distribution of parameters and chains mixture evaluation. Also saved as pdf A4 files.
+```{r trace mort}
+pdf(file=here("workflow_example", "bci_models_outputs","no_time_models",
+          "mort", "bci-7-quad_100-traceplot.pdf"), 
+    paper="a4", height = 20, width=10, onefile=F)
+plot(gm, N=4, ask=F)
+dev.off()
+```
+
+```{r}
+plot(gm, ask=F, N=4)
+```
+
+Results table.
+```{r}
+fix <- as.data.frame(gmsum$fixed)
+res <- as.data.frame(gmsum$spec_pars)
+res[1,] <- c(sqrt((pi^2)/6), rep(NA,6))
+quadrat <- as.data.frame(gmsum$random$quadrat)
+sp <- as.data.frame(gmsum$random$sp)
+quadrat.sp <- as.data.frame(gmsum$random$`quadrat:sp`)
+
+result <- bind_rows(list(intercept = fix, 
+             quadrat = quadrat,
+             sp = sp,
+             `quadrat:sp` = quadrat.sp,
+             Residual = res), .id="term")
+rownames(result) <- NULL
+
+result$levels = c(NA, gmsum$ngrps$quadrat[1],
+         gmsum$ngrps$sp[1],
+         gmsum$ngrps$`quadrat:sp`[1],
+         gmsum$nobs)
+result$variance <- result$Estimate^2
+
+sdtab <- data.frame(data = "all", 
+                  fplot = "bci",
+                  time = "7",
+                  q_size = "quad_100",
+                  ntrees = gmsum$nobs,
+                  richness = gmsum$ngrps$sp[1])
+sdtab <- sdtab[rep(seq_len(nrow(sdtab)), each = 5), ]
+rownames(sdtab) <- NULL
+
+res <- cbind(sdtab, result)
+kable(res, digits = 2)
+# saving table ------------
+save(res, file=here("workflow_example", "bci_models_outputs","no_time_models",
+          "mort", "bci-7-quad_100-table.Rdata"))
+```
+
+
+## 3. Recruitment reduced model
+
+Loading the cleaned data.
+```{r}
+df <- readRDS(here("workflow_example", "bci_cleandata", "recruitment.rds"))
+dad <- bind_rows(df, .id = "time")
+data <- dad[dad$time == 7, ]
+data$quadrat <- data[,colnames(data) == "quad_100"]
+```
+
+Models parameters.
+```{r}
+delta=0.95
+ncores = 3 # number of chains
+iter = 3000 # number of iterations per chain
+warmup = 1000 # number of burning iterations discarded per chain
+thin = 5 # thinning interval
+```
+
+Model.
+```{r, eval=F}
+gm <- brm(dead ~ 1 + (1|quadrat) + (1|sp) + (1|quadrat:sp) +
+                offset(log(y.interval)),
+              family = bernoulli(link="cloglog"),
+              data = data, 
+              chains = ncores,
+              control = list(adapt_delta = delta),
+              cores = ncores,
+	            iter = iter, warmup=warmup,
+              thin = thin)
+save(gm, file = here("workflow_example", "bci_models_outputs","no_time_models",
+          "rec", "bci-7-quad_100-model.Rdata"))
+```
+
+The model is already saved in the `bci_models_output` folder.
+```{r}
+load(here("workflow_example", "bci_models_outputs","no_time_models",
+          "rec", "bci-7-quad_100-model.Rdata"))
+```
+
+Summary table with posterior medians.
+```{r}
+gmsum <- summary(gm, robust=T) # median posterior
+gmsum
+```
+
+Traceplots for the posterior distribution of parameters and chains mixture evaluation. Also saved as pdf A4 files.
+```{r}
+pdf(file=here("workflow_example", "bci_models_outputs","no_time_models",
+          "rec", "bci-7-quad_100-traceplot.pdf"), 
+    paper="a4", height = 20, width=10, onefile=FALSE)
+plot(gm)
+dev.off()
+```
+
+```{r}
+plot(gm, ask=F, N=4)
+```
+
+Table of model results.
+```{r}
+fix <- as.data.frame(gmsum$fixed)
+res <- as.data.frame(gmsum$spec_pars)
+res[1,] <- c(sqrt((pi^2)/6), rep(NA,6))
+quadrat <- as.data.frame(gmsum$random$quadrat)
+sp <- as.data.frame(gmsum$random$sp)
+quadrat.sp <- as.data.frame(gmsum$random$`quadrat:sp`)
+
+result <- bind_rows(list(intercept = fix, 
+             quadrat = quadrat,
+             sp = sp,
+             `quadrat:sp` = quadrat.sp,
+             Residual = res), .id="term")
+rownames(result) <- NULL
+
+result$levels = c(NA, gmsum$ngrps$quadrat[1],
+         gmsum$ngrps$sp[1],
+         gmsum$ngrps$`quadrat:sp`[1],
+         gmsum$nobs)
+result$variance <- result$Estimate^2
+
+sdtab <- data.frame(data = "all", 
+                  fplot =  "bci",
+                  time = "7",
+                  q_size = "quad_100",
+                  ntrees = gmsum$nobs,
+                  richness = gmsum$ngrps$sp[1])
+sdtab <- sdtab[rep(seq_len(nrow(sdtab)), each = 5), ]
+rownames(sdtab) <- NULL
+
+res <- cbind(sdtab, result)
+kable(res, digits = 2)
+# saving table ------------
+save(res, file=here("workflow_example", "bci_models_outputs","no_time_models",
+          "rec", "bci-7-quad_100-table.Rdata"))
+```
+
+# Time/complete models
+
+Here, we show as example only one of the 10 subsampled data models.
+
+Loading the code for the first random 5-1ha quadrats:
+```{r}
+load(here("data", "samples_5ha.Rdata"))
+samples$bci$bci_1 # quadrats
+```
+
+
+## 1. Growth time model
+
+Loading the cleaned data.
+```{r}
+df <- readRDS(here("workflow_example", "bci_cleandata", "growth.rds"))
+data <- bind_rows(df, .id = "time")
+data$quadrat <- data[,colnames(data) == "quad_100"]
+```
+
+For growth in BCI, we excluded the first census interval given measurement problems in the first census.
+```{r}
+data <- data %>% filter(time != "1")
+```
+
+Taking the subsample.
+```{r}
+data <- data[data$quad_100 %in% samples$bci$bci_1, ]
+```
+
+Models parameters
+```{r}
+delta=0.95
+ncores = 3 # number of chains
+iter = 3000 # number of iterations per chain
+warmup = 1000 # number of burning iterations discarded per chain
+thin = 5 # thinning interval
+```
+
+Model.
+```{r, eval=F}
+gm <- brm(g.dbh ~ 1 + (1|quadrat) + (1|sp) + (1|time) +
+              (1|quadrat:sp) + (1|quadrat:time) + (1|sp:time), 
+            data=data, 
+            chains = ncores,
+            control = list(adapt_delta = delta),
+            cores = ncores,
+            iter = iter, warmup=warmup,
+            thin = thin,
+            save_pars = save_pars(group=FALSE),
+            seed=T)
+save(gm, file = here("workflow_example", "bci_models_outputs","time_models",
+          "grow", "bci-quad_100-1-model.Rdata"))
+```
+
+This model (as all the time models) takes more than 4 days to run in a high performance cluster. I don't advise you to run it in your personal computer. The model is already saved in the `bci_models_output` folder.
+```{r}
+load(here("workflow_example", "bci_models_outputs","time_models",
+          "grow", "bci-quad_100-1-model.Rdata"))
+```
+
+Summary table with posterior medians.
+```{r}
+gmsum <- summary(gm, robust=T) # median posterior
+gmsum
+```
+
+Traceplots for the posterior distribution of parameters and chains mixture evaluation. Also saved as pdf A4 files.
+```{r, eval=F}
+pdf(file=here("workflow_example", "bci_models_outputs","time_models",
+          "grow", "bci-quad_100-1-traceplot.pdf"), 
+    paper="a4", height = 20, width=10,
+    onefile = T)
+plot(gm, ask=F, N=4)
+dev.off()
+```
+
+```{r}
+plot(gm, ask=F, N=4)
+```
+
+Table of model results.
+```{r}
+fix <- as.data.frame(gmsum$fixed)
+  res <- as.data.frame(gmsum$spec_pars)
+  
+  quadrat <- as.data.frame(gmsum$random$quadrat)
+  sp <- as.data.frame(gmsum$random$sp)
+  time <- as.data.frame(gmsum$random$time)
+  quadrat.sp <- as.data.frame(gmsum$random$`quadrat:sp`)
+  quadrat.time <- as.data.frame(gmsum$random$`quadrat:time`)
+  sp.time <- as.data.frame(gmsum$random$`sp:time`)
+  
+  result <- bind_rows(list(intercept = fix, 
+                           quadrat = quadrat,
+                           sp = sp,
+                           time = time,
+                           `quadrat:sp` = quadrat.sp,
+                           `quadrat:time` = quadrat.time,
+                           `sp:time` = sp.time,
+                           Residual = res), .id="term")
+  rownames(result) <- NULL
+  
+  
+  result$levels = c(NA, gmsum$ngrps$quadrat[1],
+                    gmsum$ngrps$sp[1],
+                    gmsum$ngrps$time[1],
+                    gmsum$ngrps$`quadrat:sp`[1],
+                    gmsum$ngrps$`quadrat:time`[1],
+                    gmsum$ngrps$`sp:time`[1],
+                    gmsum$nobs)
+  result$variance <- result$Estimate^2
+  
+  sdtab <- data.frame(sub = "1",
+                      data = "all", 
+                      fplot = "bci",
+                      q_size = "quad_100",
+                      ntrees = gmsum$nobs,
+                      richness = gmsum$ngrps$sp[1])
+  sdtab <- sdtab[rep(seq_len(nrow(sdtab)), each = 8), ]
+  rownames(sdtab) <- NULL
+  
+  res <- cbind(sdtab, result)
+kable(res, digits = 2)
+# saving table ------------
+save(res, file=here("workflow_example", "bci_models_outputs","time_models",
+          "grow", "bci-quad_100-1-table.Rdata"))
+```
+
+
+## 2. Mortality time model
+
+Loading the cleaned data.
+```{r}
+df <- readRDS(here("workflow_example", "bci_cleandata", "mortality.rds"))
+data <- bind_rows(df, .id = "time")
+data$quadrat <- data[,colnames(data) == "quad_100"]
+```
+
+Including column for the time interval between tree measurements, in years.
+```{r}
+data$y.interval <- as.numeric(data$interval/365) # interval years
+```
+
+Taking the subsample 1.
+```{r}
+data <- data[data$quad_100 %in% samples$bci$bci_1, ]
+```
+
+Models parameters.
+```{r}
+delta=0.95
+ncores = 3 # number of chains
+iter = 3000 # number of iterations per chain
+warmup = 1000 # number of burning iterations discarded per chain
+thin = 5 # thinning interval
+```
+
+Model.
+```{r, eval=F}
+gm <- brm(dead ~ 1 + (1|quadrat) + (1|sp) + (1|time) +
+              (1|quadrat:sp) + (1|quadrat:time) + (1|sp:time) +
+              offset(log(y.interval)), 
+            family = bernoulli(link="cloglog"),
+            data=data, 
+            chains = ncores,
+            control = list(adapt_delta = delta),
+            cores = ncores,
+            iter = iter, warmup=warmup,
+            thin = thin,
+            seed=T,
+            save_pars = save_pars(group=FALSE),
+            inits="0")
+save(gm, file = here("workflow_example", "bci_models_outputs","time_models",
+          "mort", "bci-quad_100-1-model.Rdata"))
+```
+
+The model is already saved in the `bci_models_output` folder.
+```{r}
+load(here("workflow_example", "bci_models_outputs","time_models",
+          "mort", "bci-quad_100-1-model.Rdata"))
+```
+
+Summary table with posterior medians.
+```{r}
+gmsum <- summary(gm, robust=T) # median posterior
+gmsum
+```
+
+Traceplots for the posterior distribution of parameters and chains mixture evaluation. Also saved as pdf A4 files.
+```{r, eval=F}
+pdf(file=here("workflow_example", "bci_models_outputs","time_models",
+          "mort", "bci-quad_100-1-traceplot.pdf"), 
+    paper="a4", height = 20, width=10,
+    onefile = T)
+plot(gm, ask=F, N=4)
+dev.off()
+```
+
+```{r}
+plot(gm, ask=F, N=4)
+```
+
+Table of model results.
+```{r}
+fix <- as.data.frame(gmsum$fixed)
+  res <- as.data.frame(gmsum$fixed)
+  res[1,] <- c(sqrt((pi^2)/6), rep(NA,6))
+  
+  quadrat <- as.data.frame(gmsum$random$quadrat)
+  sp <- as.data.frame(gmsum$random$sp)
+  time <- as.data.frame(gmsum$random$time)
+  quadrat.sp <- as.data.frame(gmsum$random$`quadrat:sp`)
+  quadrat.time <- as.data.frame(gmsum$random$`quadrat:time`)
+  sp.time <- as.data.frame(gmsum$random$`sp:time`)
+  
+  result <- bind_rows(list(intercept = fix, 
+                           quadrat = quadrat,
+                           sp = sp,
+                           time = time,
+                           `quadrat:sp` = quadrat.sp,
+                           `quadrat:time` = quadrat.time,
+                           `sp:time` = sp.time,
+                           Residual = res), .id="term")
+  rownames(result) <- NULL
+  
+  
+  result$levels = c(NA, gmsum$ngrps$quadrat[1],
+                    gmsum$ngrps$sp[1],
+                    gmsum$ngrps$time[1],
+                    gmsum$ngrps$`quadrat:sp`[1],
+                    gmsum$ngrps$`quadrat:time`[1],
+                    gmsum$ngrps$`sp:time`[1],
+                    gmsum$nobs)
+  result$variance <- result$Estimate^2
+  
+  sdtab <- data.frame(sub = "1",
+                      data = "all", 
+                      fplot = "bci",
+                      q_size = "quad_100",
+                      ntrees = gmsum$nobs,
+                      richness = gmsum$ngrps$sp[1])
+  sdtab <- sdtab[rep(seq_len(nrow(sdtab)), each = 8), ]
+  rownames(sdtab) <- NULL
+
+  res <- cbind(sdtab, result)
+kable(res, digits = 2)
+# saving table ------------
+save(res, file=here("workflow_example", "bci_models_outputs","time_models",
+          "mort", "bci-quad_100-1-table.Rdata"))
+```
+
+
+
+## 3. Recruitment time model
+
+Loading the cleaned data.
+```{r}
+df <- readRDS(here("workflow_example", "bci_cleandata", "recruitment.rds"))
+data <- bind_rows(df, .id = "time")
+data$quadrat <- data[,colnames(data) == "quad_100"]
+```
+
+Including column for the quadrat mean time interval in years.
+```{r}
+inter <- data %>% group_by(time, quadrat) %>% 
+    summarise(y.interval = as.numeric(mean(interval, na.rm = T)/365))
+# if interval is 0 or NaN, use mean of plot
+inter$y.interval[is.nan(inter$y.interval) | inter$y.interval == 0] <- 
+    mean(inter$y.interval, na.rm = T)
+```
+
+Taking the subsample 1
+```{r}
+data <- data[data$quad_100 %in% samples$bci$bci_1, ]
+```
+
+Models parameters.
+```{r}
+delta=0.95
+ncores = 3 # number of chains
+iter = 3000 # number of iterations per chain
+warmup = 1000 # number of burning iterations discarded per chain
+thin = 5 # thinning interval
+```
+
+Model.
+```{r, eval=F}
+gm <- brm(rec ~ 1 + (1|quadrat) + (1|sp) + (1|time) +
+              (1|quadrat:sp) + (1|quadrat:time) + (1|sp:time) +
+              offset(log(y.interval)), 
+            family = bernoulli(link="cloglog"),
+            data=data, 
+            chains = ncores,
+            control = list(adapt_delta = delta),
+            cores = ncores,
+            iter = iter, warmup=warmup,
+            thin = thin,
+            seed=T,
+            save_pars = save_pars(group=FALSE),
+            inits="0")
+save(gm, file = here("workflow_example", "bci_models_outputs","time_models",
+          "rec", "bci-quad_100-1-model.Rdata"))
+```
+
+The model is already saved in the `bci_models_output` folder.
+```{r}
+load(here("workflow_example", "bci_models_outputs","time_models",
+          "rec", "bci-quad_100-1-model.Rdata"))
+```
+
+Summary table with posterior medians.
+```{r}
+gmsum <- summary(gm, robust=T) # median posterior
+gmsum
+```
+
+Traceplots for the posterior distribution of parameters and chains mixture evaluation. Also saved as pdf A4 files.
+```{r, eval=F}
+pdf(file=here("workflow_example", "bci_models_outputs","time_models",
+          "rec", "bci-quad_100-1-traceplot.pdf"), 
+    paper="a4", height = 20, width=10,
+    onefile = T)
+plot(gm, ask=F, N=4)
+dev.off()
+```
+
+```{r}
+plot(gm, ask=F, N=4)
+```
+
+Table of model results.
+```{r}
+fix <- as.data.frame(gmsum$fixed)
+  res <- as.data.frame(gmsum$fixed)
+  res[1,] <- c(sqrt((pi^2)/6), rep(NA,6))
+  
+  quadrat <- as.data.frame(gmsum$random$quadrat)
+  sp <- as.data.frame(gmsum$random$sp)
+  time <- as.data.frame(gmsum$random$time)
+  quadrat.sp <- as.data.frame(gmsum$random$`quadrat:sp`)
+  quadrat.time <- as.data.frame(gmsum$random$`quadrat:time`)
+  sp.time <- as.data.frame(gmsum$random$`sp:time`)
+  
+  result <- bind_rows(list(intercept = fix, 
+                           quadrat = quadrat,
+                           sp = sp,
+                           time = time,
+                           `quadrat:sp` = quadrat.sp,
+                           `quadrat:time` = quadrat.time,
+                           `sp:time` = sp.time,
+                           Residual = res), .id="term")
+  rownames(result) <- NULL
+  
+  
+  result$levels = c(NA, gmsum$ngrps$quadrat[1],
+                    gmsum$ngrps$sp[1],
+                    gmsum$ngrps$time[1],
+                    gmsum$ngrps$`quadrat:sp`[1],
+                    gmsum$ngrps$`quadrat:time`[1],
+                    gmsum$ngrps$`sp:time`[1],
+                    gmsum$nobs)
+  result$variance <- result$Estimate^2
+  
+  sdtab <- data.frame(sub = "1",
+                      data = "all", 
+                      fplot = "bci",
+                      q_size = "quad_100",
+                      ntrees = gmsum$nobs,
+                      richness = gmsum$ngrps$sp[1])
+  sdtab <- sdtab[rep(seq_len(nrow(sdtab)), each = 8), ]
+  rownames(sdtab) <- NULL
+
+  res <- cbind(sdtab, result)
+kable(res, digits = 2)
+# saving table ------------
+save(res, file=here("workflow_example", "bci_models_outputs","time_models",
+          "rec", "bci-quad_100-1-table.Rdata"))
+```
+

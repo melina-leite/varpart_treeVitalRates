@@ -1,0 +1,330 @@
+---
+title: "Comparing full data with subsampling for time and notime models"
+author: "Melina Leite"
+date: "`r Sys.Date()`"
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "..") })
+output:
+  rmdformats::readthedown:
+    highlight: kate
+    self_contained: true
+    thumbnails: false
+    lightbox: true
+    gallery: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = T, warning = F, fig.align = "center", message = F,
+  error = F, cache = F, cache.lazy = FALSE)
+
+library(knitr)
+library(tidyverse); library(cowplot); library(patchwork); 
+theme_set(theme_cowplot())
+library(ggbeeswarm)
+library(here)
+```
+
+```{r}
+#labels
+grpvitT <- as_labeller(c(grow = "Growth", mort="Mortality", 
+                         rec="Recruitment",
+                        quadrat = "Space", `sp:time`="Species x Time", 
+                         `quadrat:time`="Space x Time", `quadrat:sp`= "Species x Space",
+                         sp="Species", Residual = "Residual",
+                        time= "Time"))
+```
+
+
+# No time Lambir
+
+Robustness check for no time models when comparing results from forest plots of very different sizes.
+
+Comparing the results for GROWTH full data of lambir-1 with 10 subsampled 5 ha. 50x50 quadrat size.
+
+Subsampled models:
+```{r}
+path= here("models_outputs/models_notime/subsampling_lambir/grow/table")
+files <- list.files(path)
+
+# import results data to list    
+all = lapply(files, function(x) get(assign(x, load(paste0(path, "/", x)))))
+names(all) <- seq(1:10)
+tudo <- bind_rows(all, .id="sub")
+
+#remove intercept to include again as a separate column
+intercepts <- tudo %>% filter(term == "intercept")
+names(intercepts)[9] = "intercept"
+
+tudos <- tudo %>% filter(term != "intercept") %>%
+  left_join(intercepts[,c(1:5,9)], by= c("sub","data", "fplot","time", "q_size")) %>%
+  group_by(sub,data, fplot, time, q_size) %>% 
+  mutate(VPC = variance/sum(variance))  %>%
+  mutate(term = fct_relevel(term,"quadrat", "quadrat:sp", "sp", "Residual")) %>%
+  ungroup()
+
+# divide the sd of the terms by the mean growth (intercept) for each dataset.
+tudos$stdev = tudos$Estimate/tudos$intercept
+
+tudosmean <- tudos %>%  
+  group_by(data, fplot, time, q_size, term) %>% 
+  summarise(stdev.mean = mean(stdev),
+            VPC.mean = mean(VPC))
+```
+
+Full data model
+```{r}
+load(here("models_outputs/all_results_notime.Rdata"))
+full <- vital %>% filter(vital=="grow", fplot=="lam",time=="3", q_size=="5") %>%
+  select(-vital)
+```
+
+Richness for the subsampled data:
+```{r}
+unique(tudos$richness)
+summary(unique(tudos$richness))
+```
+
+Mean richness is `r round(mean(unique(tudos$richness))*100/full$richness[1])` % of full data richness.
+
+Mean number of trees `r round(mean(unique(tudos$ntrees)))` (`r round(mean(unique(tudos$ntrees))*100/unique(full$ntrees))`% of full data richness `r unique(full$ntrees)`)
+
+```{r}
+summary(unique(tudos$ntrees))
+```
+
+## Standard deviation
+
+```{r}
+ggplot(tudos, aes(y=stdev, x=term)) + 
+  #geom_violin()+
+  geom_quasirandom(alpha=0.5, groupOnX = TRUE, width=0.2, size=4) +
+    stat_summary(fun=mean, size=0.3, fatten=5,
+                         geom="crossbar", width=0.4) +
+ geom_point(data=full, aes(y=stdev, x=term), col="red", size=5) +
+  ylab("Standard deviation")+
+  
+  ggtitle("SD fulldata in red; SD subsamples mean in blue")
+```
+
+```{r}
+juntos <- tudos %>% left_join(full[,c(7,18,19)], by=c("term"),suffix=c("", ".full")) %>% 
+  mutate(stdev.dif = stdev.full -stdev,
+         VPC.dif = VPC.full - VPC) 
+juntos%>%
+  ggplot(aes(x=term,y=stdev.dif)) + geom_boxplot() +
+  geom_hline(yintercept=0, linetype="dashed")
+```
+
+## VPC
+
+```{r}
+tudos$data <- "subsampled"
+full$data <- "original"
+lam <- ggplot(tudos, aes(y=VPC, x=term, col=data)) + 
+  geom_quasirandom(alpha=0.3, groupOnX = TRUE, width=0.2, size=4) +
+  stat_summary(fun=mean, size=0.3, fatten=5,
+                         geom="crossbar", width=0.4) +
+  geom_point(data=full, aes(y=VPC, x=term, col=data), size=15, shape="_") +
+  scale_color_manual(values=c("red","black")) +
+  scale_x_discrete(name="",
+                    labels=c("Space", "Species*Space", "Species","Residual"))+
+  theme(legend.key.size = unit(0.01, 'cm'))
+lam
+png(here("figures", "FIG_S2.1_lam_subXoriginal.png"), height = 400, width=650, res=100)
+lam
+dev.off()
+```
+
+
+```{r}
+juntos %>%
+  ggplot(aes(x=term,y=VPC.dif)) + geom_boxplot() +
+  geom_hline(yintercept=0, linetype="dashed")
+```
+
+```{r}
+tudosmean[,c(5,7)] %>% left_join(full[,c(7,18)],by="term") %>%
+  mutate(dif=VPC.mean-VPC)
+```
+
+
+# TIME models for Luquillo and Fushan forest plots
+
+For the time models we do the opposite, we want to see if the subsampling analysis is able to get the same results if we were doing the analysis with the entire plot
+
+Growth
+```{r}
+path = here("models_outputs/models_time/entireplot/grow/table")
+files = list.files(path)
+
+# import results data to list    
+all = lapply(files, function(x) get(assign(x, load(paste0(path, "/", x)))))
+
+tudo <- bind_rows(all)
+
+#remove intercept to include again as a separate column
+intercepts <- tudo %>% filter(term == "intercept")
+names(intercepts)[7] = "intercept"
+
+growT <- tudo %>% filter(term != "intercept") %>%
+  left_join(intercepts[,c(1:3,7)], by= c("data", "fplot", "q_size")) %>%
+  group_by(data, fplot, q_size) %>% 
+  mutate(VPC = variance/sum(variance))  %>% ungroup() %>%
+  mutate(term = fct_relevel(term, "quadrat", "sp:time","time",
+                            "quadrat:time",
+                            "quadrat:sp", "sp", "Residual"),
+         q_size = fct_recode(q_size, `5`= "quad_5", `10`= "quad_10",
+                             `20`="quad_20",
+                            `50`="quad_50",  `100`="quad_100")) %>%
+  mutate(q_size = fct_relevel(q_size, "5","10", "20","50", "100")) %>%
+  as.data.frame()
+
+# divide the sd of the terms by the mean growth (intercept) for each dataset.
+growT$stdev = growT$Estimate/growT$intercept
+
+```
+
+Mortality
+```{r}
+path = here("models_outputs/models_time/entireplot/mort/table")
+files = list.files(path)
+
+# import results data to list    
+all = lapply(files, function(x) get(assign(x, load(paste0(path, "/", x)))))
+
+tudo <- bind_rows(all) 
+
+#remove intercept to include again as a separate column
+intercepts <- tudo %>% filter(term == "intercept")
+names(intercepts)[7] = "intercept"
+
+mortT <- tudo %>% filter(term != "intercept") %>%
+  left_join(intercepts[,c(1:3,7)], by= c("data", "fplot", "q_size")) %>%
+  group_by(data, fplot, q_size) %>% 
+  mutate(VPC = variance/sum(variance))  %>% ungroup() %>%
+   mutate(term = fct_relevel(term,"quadrat", "sp:time","time",  "quadrat:time",
+                            "quadrat:sp", "sp", "Residual"),
+         q_size = fct_recode(q_size, `5`= "quad_5", `10`= "quad_10",
+                             `20`="quad_20",
+                            `50`="quad_50",  `100`="quad_100")) %>%
+  mutate(q_size = fct_relevel(q_size, "5","10", "20","50", "100")) %>%
+  as.data.frame()
+
+mortT$stdev <- mortT$Estimate
+```
+
+Recruitment
+```{r}
+path = here("models_outputs/models_time/entireplot/rec/table")
+files = list.files(path)
+
+# import results data to list    
+all = lapply(files, function(x) get(assign(x, load(paste0(path, "/", x)))))
+
+tudo <- bind_rows(all)
+
+#remove intercept to include again as a separate column
+intercepts <- tudo %>% filter(term == "intercept")
+names(intercepts)[7] = "intercept"
+
+recT <- tudo %>% filter(term != "intercept") %>%
+  left_join(intercepts[,c(1:3,7)], by= c("data","fplot", "q_size")) %>%
+  group_by(data, fplot, q_size) %>% 
+  mutate(VPC = variance/sum(variance))  %>% ungroup() %>%
+   mutate(term = fct_relevel(term,"quadrat", "sp:time", "time", "quadrat:time",
+                            "quadrat:sp", "sp", "Residual"),
+         q_size = fct_recode(q_size, `5`= "quad_5", `10`= "quad_10",
+                             `20`="quad_20", `50` = "quad_50",
+                             `100`="quad_100")) %>%
+  mutate(q_size = fct_relevel(q_size, "5","10", "20","50", "100")) %>%
+  as.data.frame()
+
+recT$stdev <- recT$Estimate
+```
+
+```{r}
+entire <- bind_rows(list(grow = growT, mort=mortT, rec=recT),.id="vital") 
+```
+
+Subsamples results
+
+```{r}
+load(here("models_outputs/all_results_time.Rdata"))
+subis <- vitalT %>% 
+  filter(data=="all", q_size == "100", 
+                  fplot %in% c("fus", "luq"))
+```
+
+
+Entire data richness and number of species
+
+```{r}
+valent <- entire %>% group_by(fplot,vital) %>% 
+                                  summarise(richness = mean(richness),
+                                               ntrees = mean(ntrees))
+```
+
+subsampling mean richness and number of species
+
+```{r}
+subis %>% group_by(fplot,vital) %>% summarise(rich.mean = mean(richness),
+                                              ntrees.mean = mean(ntrees)) %>%
+  left_join(valent, by=c("fplot", "vital")) %>%
+  mutate(porc.rich = round(rich.mean*100/richness),
+         porc.ntrees = round(ntrees.mean*100/ntrees)) %>% kable()
+```
+
+## SD
+
+```{r}
+ggplot(subis, aes(y=stdev, x=fplot)) + 
+  facet_grid(vital~term, scales="free") +
+  geom_quasirandom(alpha=0.5, groupOnX = TRUE, width=0.2, size=2) +
+    stat_summary(fun=mean, size=0.3, fatten=5,
+                         geom="crossbar", width=0.4) +
+ geom_point(data=entire, aes(y=stdev, x=fplot), col="red", size=3) +
+  ggtitle("SD fulldata in red")
+```
+
+## VPC
+
+```{r, fig.height=6, fig.width=8}
+subis$data <- "subsampled"
+entire$data <- "original"
+lam <- ggplot(tudos, aes(y=VPC, x=term, col=data)) + 
+  geom_quasirandom(alpha=0.3, groupOnX = TRUE, width=0.2, size=4) +
+  stat_summary(fun=mean, size=0.3, fatten=5,
+                         geom="crossbar", width=0.4) +
+  geom_point(data=full, aes(y=VPC, x=term, col=data), size=15, shape="_") +
+  scale_color_manual(values=c("red","black")) +
+  scale_x_discrete(name="",
+                    labels=c("Space", "Species*Space", "Species","Residual"))+
+  theme(legend.key.size = unit(0.01, 'cm'))
+
+
+vpc<- ggplot(subis, aes(y=VPC, x=fplot, col=data)) + 
+  facet_grid(vital~term, scales="free", labeller=grpvitT) +
+  geom_quasirandom(alpha=0.2, groupOnX = TRUE, width=0.2, size=2) +
+    stat_summary(fun=mean, size=0.3, fatten=3,
+                         geom="crossbar", width=0.5) +
+ geom_point(data=entire, aes(y=VPC, x=fplot, col=data), 
+            size=8,shape= "_") +
+  scale_color_manual(values=c("red","black")) +
+  theme( panel.background = element_rect(colour="lightgray"),
+         legend.position = "bottom")
+vpc
+png(here("figures","FIG_S2.2_fusLuq_subXoriginal.png"), height = 600, width=1000, res=100)
+vpc
+dev.off()
+```
+
+```{r}
+subismean <- subis %>% group_by(vital,fplot,term) %>%
+  summarise(meanVPC = mean(VPC))
+
+subismean %>% left_join(entire[,c(1,3,7,18)], by=c("vital","fplot", "term")) %>%
+  mutate(difference=meanVPC-VPC) %>% arrange(desc(abs(difference))) %>% 
+  kable()
+```
+
