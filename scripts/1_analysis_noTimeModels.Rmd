@@ -471,43 +471,51 @@ tvital %>% select(vital, term, q_size, VPC) %>%
 map
 ```{r}
 ###### xy locations ######
-forest <- read.table(here("data/plot_sites_information.csv"), sep=";", header=T)
+forest <- read.table(here("data/plot_sites_information.csv"), sep=",",
+                     header=T)
 forest$long[forest$ID == "len"] <- forest$long[forest$ID == "len"] -2
 fxy <- st_as_sf(forest[,-27], coords = c("long", "lat"), crs = 4326) #WSG84
 fxy <- cbind(fxy, forest[,9:10])
-not.yet <- c("cha")# remove not used plots
-fxy$data.status = T
-fxy$data.status[fxy$ID %in% not.yet ] <- F
-fxy <- fxy %>% filter(data.status==T)
+
 fxy$lat = st_coordinates(fxy)[,2]
 fxy$long = st_coordinates(fxy)[,1]
 fxy$site[fxy$site == "Smithsonian Environmental Research Center"] <- "SERC"
 fxy$site[fxy$site == "Smithsonian Conservation Biology Institute"] <- "SCBI"
 
-world <- ne_countries(scale = "medium", returnclass = "sf")
-world <- world %>% filter(geounit != "Antarctica")
+world <- ne_countries(scale = "medium", returnclass = "sf") %>%
+  filter(geounit != "Antarctica") 
 ```
+
+
+
 
 ```{r, fig.height=20, fig.width=15}
 set.seed(5)
 A <- ggplot(data = world) +
   geom_sf(size=0.2) + 
-  geom_sf(data=fxy, aes(fill=abs(lat)), size=4, shape=21, col="black") +
-  geom_label_repel(data=fxy, aes(y=lat, x=long, label=site), size=5.5,
-                   label.size = 0,
-                   label.padding = 0.2) +
+  geom_sf(data=fxy, aes(fill=abs(lat), size=n_census_intervals), 
+           shape=21, col="black") +
+  scale_size(name="# census \n intervals",range=c(2,10), breaks = c(1,2,3,5,7),
+            )+
   scale_fill_gradientn(colours=pal) +
+  guides(fill = "none")+
+  geom_label_repel(data=fxy, aes(y=lat, x=long, label=site), size=5.5,
+                   label.size = 0,box.padding = 0.7,
+                  label.padding = 0.01) +
   scale_x_continuous(expand = expansion(mult=c(-0.12, -0.15))) +
   scale_y_continuous(expand = expansion(mult=-c(0.02, 0.15))) +
   xlab("") + ylab("") +
   theme_bw()+
-  theme(legend.position= "none",
+  theme(legend.position= c(0.05,0.18),
+        legend.text = element_text(size=12),
+        legend.title = element_text(size=15),
         axis.text = element_blank(),
         axis.ticks = element_blank(),
         plot.margin =  margin(-0.5, 0.1, -1, -0.3, "cm")) +  labs(tag="(a)") +
   geom_hline(yintercept=c(23.5,0,-23.5), linetype="dashed", col="gray") +#+
   theme(plot.tag.position = c(0,1),
-  plot.tag = element_text(size=20, vjust = 1.2, hjust = 0, face="bold"))
+        plot.tag = element_text(size=20, vjust = 1.2, hjust = 0, face="bold"))
+
 
 B <- vpc.fig1 + ggtitle("") + labs(tag = "(b)") +
   theme_cowplot()+
@@ -536,7 +544,7 @@ bot <- plot_spacer() + B + C + plot_layout(widths = c(0.00005,1,0.6))
 
 A + wrap_plots(bot)+
 plot_layout(ncol=1,widths = c(0.1,1), heights = c(1,0.6))
-ggsave(here("figures/figure_1.jpeg"), height = 12, width=15)
+ggsave(here("figures/FIG_1.jpeg"), height = 12, width=15)
 ```
 
 
