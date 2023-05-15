@@ -2,3 +2,5 @@
 .DS_Store
 .Rprofile
 .Rproj.user/*
+.Rproj.user
+.Rhistory

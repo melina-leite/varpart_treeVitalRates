@@ -1,23 +1,22 @@
-"ID";"site";"n_census_total";"first_census";"last_census";"size_ha";"gx_m";"gy_m";"size_data";"gx_data";"gy_data";"lat";"long";"lat_zone";"elev_min";"elev_max";"top_relief";"biogeographic_zone";"country";"koppen";"mat";"map";"PET_annual";"Degradation_index";"dominant_soil";"dominant_veg";"natural_disturbance";"Nsp_literature";"Nsp_lit_updated"
-"ama";"Amacayacu";2;2007;2013;25;500;500;25;500;500;"-3.8091";"-70.2678";"tropical";"88.5";"110.9";"22.4";"Neotropics";"Colombia";"Af";"25.8";3216;1010;2;"Ult";"BE";"FI; W; In";1133;
-"bci";"Barro Colorado Island";8;1982;2017;50;1000;500;50;1000;500;"9.1543";"-79.8461";"tropical";120;160;40;"Neotropics";"Panama";"Am";"27.1";2551;1311;10;"Ox";"BdD; BE";"D; W";299;
-"cha";"Changbaishan";3;2004;2014;25;500;500;25;500;500;"42.3833";128083;"temperate";792;810;18;"Paleartic";"China";"Dwb";"2.9";700;762;3;"Alf";"NE; BcD";;52;
-"edo";"Edoro - Ituri";3;1994;2007;20;400;500;20;400;500;"1.4368";"28.5826";"tropical";700;850;150;"Afrotropics";"Democratic Republic of Congo";"Af";"24.3";1682;1168;1;"Ox";"BE";"W; A";445;
-"fus";"Fushan";4;2004;;25;500;500;25;500;500;"24.7614";121555;"subtropical";600;733;133;"Indo Malaya";"Taiwan";"Cfa";"18.2";4271;1085;6;"Ult; In";"BE";"H";110;
-"idc";"Ilha do Cardoso";3;2004;2019;"10.2";320;320;9;300;300;"-25.0955";"-47.9573";"subtropical";3;8;5;"Neotropics";"Brasil";"Cfa";"22.4";2100;;3;"S";"BE";;106;
-"kor";"Korup";2;1996;2010;50;1000;500;50;1000;500;"5.07389";"8.85472";"tropical";150;240;90;"Afrotropics";"Cameroon";"Am";"26.6";5272;1050;2;"Ult; Ox";"BE";"W";494;489
-"lam";"Lambir";4;1991;;52;1040;500;50;1000;500;"4.1865";114017;"tropical";104;244;140;"Indo Malaya";"Malaysia";"Af";"26.6";2664;1114;25;"Ult";"BE";"L; D";1182;
-"ldw";"Lilly Dickey Woods";2;2012;2017;25;500;500;25;500;500;"39.2359";"-86.2181";"temperate";230;303;73;"Neartic";"USA";"Cfa";"11.6";1203;981;15;"In; Ult; Alf";"BcD";"W; D; Ic";35;
-"lpl";"La Planada";2;1997;;25;500;500;25;500;500;"1.1558";"-77.9935";"tropical";1796;1840;44;"Neotropics";"Colombia";"Cfb";19;4087;;;"An";"BE";"W";240;
-"len";"Lenda - Ituri";3;1994;2007;20;400;500;20;400;500;"1.4368";"28.5826";"tropical";700;850;150;"Afrotropics";"Democratic Republic of Congo";"Af";"24.3";1682;1168;1;"Ox";"BE";"W; A";445;
-"luq";"Luquillo";5;1990;;16;320;500;15;300;500;"18.3262";-65816;"tropical";333;428;95;"Neotropics";"Puerto Rico, USA";"Am";"22.8";3548;1219;15;"Ox; Ult";"BE";"H; L";138;
-"mos";"Mo Singto";4;2004;;31;620;500;30;600;500;"14.4333";"101.35";"tropical";725;815;90;"Indo Malaya";"Thailand";"Aw";"23.5";2100;1300;14;;"BE; BdD";"W";262;271
-"pas";"Pasoh";5;1986;;50;1000;500;50;1000;500;2982;102313;"tropical";70;90;20;"Indo Malaya";"Malaysia";"Af";"27.9";1788;1120;30;"Ult";"BE";"W";814;
-"scbi";"Smithsonian Conservation Biology Institute";2;2008;;"25.6";400;640;24;400;600;"38.8935";"-78.1454";"temperate";273;338;65;"Neartic";"USA";"Cfa";"12.9";1001;1003;18;"Alf";"BcD";"W, Ic";64;
-"serc";"Smithsonian Environmental Research Center";2;2007;;16;400;400;16;400;400;"38.8891";"-76.5594";"temperate";6;10;4;"Neartic";"USA";"Cfa";"13.2";1068;1111;24;"Ult; In; En";"BcD";"H; W";79;
-"sin";"Sinharaja";2;1993;;25;500;500;25;500;500;"6.4023";"80.4023";"tropical";424;575;151;"Indo Malaya";"Sri Lanka";"Af";"22.5";5016;1384;8;"Ult";"BE";"W";204;
-"ucsc";"Santa Cruz";2;2007;;16;;;6;200;300;"37.0124";-122075;"temperate";314;332;18;"Neartic";"USA";"Csb";"14.8";778;;;"Mo";"BcD";"W, Ic";33;
-"wab";"Wabikon";2;2008;;"25.6";300;840;24;300;800;"45.5546";"-88.7945";"temperate";"488.3";"514.2";"25.9";"Neartic";"USA";"Dfb";"4.2";805;;;"Alf";"BdC";"W";42;
-"wfdp";"Wind River";2;2009;;"25.6";800;340;24;800;300;"45.8197";"-121.9558";"temperate";"352.4";"384.7";"32.3";"Neartic";"USA";"Csb";"9.2";2495;770;10;"An";"NE";"Fi; W; In";23;
-"wyw";"Wytham Woods";2;2008;;18;310;600;18;300;600;"51.7743";"-1.3379";"temperate";104;163;59;"Paleartic";"United Kingdom";"Cfb";10;717;637;40;"E";"BcD";;23;
-"zof";"Zofin";2;2012;;25;500;500;25;500;500;"48.6638";"14.7073";"temperate";735;825;90;"Paleartic";"Czech Republic";"Cfb";"6.2";866;;;"S; In; Hi";"BdC; NE";"W; In";12;
+"ID","site","n_census_intervals","first_census","last_census","size_ha","gx_m","gy_m","size_data","gx_data","gy_data","lat","long","lat_zone","elev_min","elev_max","top_relief","biogeographic_zone","country","koppen","mat","map","PET_annual","Degradation_index","dominant_soil","dominant_veg","natural_disturbance","Nsp_literature","Nsp_lit_updated"
+"ama","Amacayacu",1,2007,2017,25,500,500,25,500,500,"-3.8091","-70.2678","tropical","88.5","110.9","22.4","Neotropics","Colombia","Af","25.8",3216,1010,2,"Ult","BE","FI; W; In",1133,
+"bci","Barro Colorado Island",7,1981,2016,50,1000,500,50,1000,500,"9.1543","-79.8461","tropical",120,160,40,"Neotropics","Panama","Am","27.1",2551,1311,10,"Ox","BdD; BE","D; W",299,
+"edo","Edoro - Ituri",2,1994,2007,20,400,500,20,400,500,"1.4368","28.5826","tropical",700,850,150,"Afrotropics","Democratic Republic of Congo","Af","24.3",1682,1168,1,"Ox","BE","W; A",445,
+"fus","Fushan",3,2003,2019,25,500,500,25,500,500,"24.7614",121555,"subtropical",600,733,133,"Indo Malaya","Taiwan","Cfa","18.2",4271,1085,6,"Ult; In","BE","H",110,
+"idc","Ilha do Cardoso",1,2009,2019,"10.2",320,320,9,300,300,"-25.0955","-47.9573","subtropical",3,8,5,"Neotropics","Brasil","Cfa","22.4",2100,,3,"S","BE",,106,
+"kor","Korup",1,1997,2010,50,1000,500,50,1000,500,"5.07389","8.85472","tropical",150,240,90,"Afrotropics","Cameroon","Am","26.6",5272,1050,2,"Ult; Ox","BE","W",494,489
+"lam","Lambir",3,1991,2009,52,1040,500,50,1000,500,"4.1865",114017,"tropical",104,244,140,"Indo Malaya","Malaysia","Af","26.6",2664,1114,25,"Ult","BE","L; D",1182,
+"ldw","Lilly Dickey Woods",1,2012,2017,25,500,500,25,500,500,"39.2359","-86.2181","temperate",230,303,73,"Neartic","USA","Cfa","11.6",1203,981,15,"In; Ult; Alf","BcD","W; D; Ic",35,
+"lpl","La Planada",1,1997,2003,25,500,500,25,500,500,"1.1558","-77.9935","tropical",1796,1840,44,"Neotropics","Colombia","Cfb",19,4087,,,"An","BE","W",240,
+"len","Lenda - Ituri",2,1994,2007,20,400,500,20,400,500,"1.4368","28.5826","tropical",700,850,150,"Afrotropics","Democratic Republic of Congo","Af","24.3",1682,1168,1,"Ox","BE","W; A",445,
+"luq","Luquillo",3,2001,2016,16,320,500,15,300,500,"18.3262",-65816,"tropical",333,428,95,"Neotropics","Puerto Rico, USA","Am","22.8",3548,1219,15,"Ox; Ult","BE","H; L",138,
+"mos","Mo Singto",2,2003,2017,31,620,500,30,600,500,"14.4333","101.35","tropical",725,815,90,"Indo Malaya","Thailand","Aw","23.5",2100,1300,14,,"BE; BdD","W",262,271
+"pas","Pasoh",5,1986,2011,50,1000,500,50,1000,500,2982,102313,"tropical",70,90,20,"Indo Malaya","Malaysia","Af","27.9",1788,1120,30,"Ult","BE","W",814,
+"scbi","Smithsonian Conservation Biology Institute",1,2008,2013,"25.6",400,640,24,400,600,"38.8935","-78.1454","temperate",273,338,65,"Neartic","USA","Cfa","12.9",1001,1003,18,"Alf","BcD","W, Ic",64,
+"serc","Smithsonian Environmental Research Center",1,2008,2014,16,400,400,16,400,400,"38.8891","-76.5594","temperate",6,10,4,"Neartic","USA","Cfa","13.2",1068,1111,24,"Ult; In; En","BcD","H; W",79,
+"sin","Sinharaja",2,1993,2008,25,500,500,25,500,500,"6.4023","80.4023","tropical",424,575,151,"Indo Malaya","Sri Lanka","Af","22.5",5016,1384,8,"Ult","BE","W",204,
+"ucsc","Santa Cruz",2,2006,2020,16,,,6,200,300,"37.0124",-122075,"temperate",314,332,18,"Neartic","USA","Csb","14.8",778,,,"Mo","BcD","W, Ic",33,
+"wab","Wabikon",2,2008,2018,"25.6",300,840,24,300,800,"45.5546","-88.7945","temperate","488.3","514.2","25.9","Neartic","USA","Dfb","4.2",805,,,"Alf","BdC","W",42,
+"wfdp","Wind River",1,2010,2016,"25.6",800,340,24,800,300,"45.8197","-121.9558","temperate","352.4","384.7","32.3","Neartic","USA","Csb","9.2",2495,770,10,"An","NE","Fi; W; In",23,
+"wyw","Wytham Woods",3,2008,2021,18,310,600,18,300,600,"51.7743","-1.3379","temperate",104,163,59,"Paleartic","United Kingdom","Cfb",10,717,637,40,"E","BcD",,23,
+"zof","Zofin",1,2012,2017,25,500,500,25,500,500,"48.6638","14.7073","temperate",735,825,90,"Paleartic","Czech Republic","Cfb","6.2",866,,,"S; In; Hi","BdC; NE","W; In",12,
