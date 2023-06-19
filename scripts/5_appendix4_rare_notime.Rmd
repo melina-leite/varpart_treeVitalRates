@@ -1,5 +1,5 @@
 ---
-title: "RESULTS NOTIME excluding/regrouping rare species"
+title: "Rare species patterns and results excluding rare species for no-time models"
 author: "Melina Leite"
 date: "`r  Sys.Date()`"
 knit: (function(inputFile, encoding) {
@@ -24,8 +24,146 @@ theme_set(theme_cowplot())
 library(ggbeeswarm)
 library(DirichletReg)
 library(here)
+library(htmlTable)
 ```
 
+
+# Classifying rare species
+
+Species classification was done for each forest plot and time interval separately. We used the living and dead individuals of the final census from the interval. We used the FuzzyQ clustering algorithm in the ‘FuzzyQ’ R package (Balbuena et al., 2021) to estimate the probability of each species to be common or rare based on species abundance and occupancy in 50x50 m quadrats.
+
+To describe and compare rarity patterns in all forest, we estimated the number of species, number of individuals, and density of rare and common species. For the forests plots with more than 1 census interval, we averaged the estimates across census intervals. 
+
+Here, we provide the list of species code and the classification in a Rdata file.
+
+```{r}
+load(here("data/rare_species_classification.Rdata"))
+
+# plot variables including
+plots_info <- read.table(here("data/plot_sites_information.csv"), sep=",", header=T)
+
+classi <-classi %>% left_join(plots_info[,c(1,6,9,12,17:23,28)], by=c("fplot" = "ID"))
+classi$fplot.time = paste0(classi$fplot,"_", classi$time)
+```
+
+
+
+```{r}
+rich = classi %>%  count(fplot.time,rarity) %>% rename(rich=n)
+ntree = classi %>% group_by(fplot.time,rarity) %>% 
+  summarise(ntrees = sum(n))
+
+dat <- rich %>% left_join(ntree, by=c("fplot.time", "rarity")) %>%
+  pivot_wider(names_from = rarity, values_from =c(rich, ntrees)) %>%
+  mutate(p.rich_common = rich_common*100/(rich_common+rich_rare),
+         p.rich_rare = rich_rare*100/(rich_common+rich_rare),
+         p.ntrees_common = ntrees_common*100/(ntrees_common+ntrees_rare),
+         p.ntrees_rare = ntrees_rare*100/(ntrees_common+ntrees_rare))
+
+#Mean per forest plots with more than 1 census interval
+dat.m <- dat %>% separate(fplot.time, c("fplot", "time")) %>%
+  group_by(fplot) %>% 
+  summarise_at(vars(rich_common:p.ntrees_rare),mean) %>%
+  group_by(fplot) %>% 
+  summarise_at(vars(rich_common:p.ntrees_rare),round,digits=0) %>%
+  select(fplot,rich_common, p.rich_common, rich_rare, p.rich_rare,
+         ntrees_common, p.ntrees_common, ntrees_rare, p.ntrees_rare)
+```
+
+```{r}
+dat.m %>%
+  htmlTable(header=c("Forest" ,rep(c("N", "%"), 4)),
+            cgroup = list(c("", "Species richness", "Number of trees"),
+                           c("", "Common", "Rare", "Common", "rare")),
+            n.cgroup = list(c(1,4,4),
+                             c(1,2,2,2,2)),caption="Table S4.1. Number and percentages of species and trees classified as common or rare per forest plot. See Table S1.1 and S1.2 for forest plot names and information. For forest plots with more than 1 census interval, we average the values across intervals."
+            )
+```
+
+```{r tableS4.2}
+classi %>% group_by(rarity) %>%
+  mutate(dens.ha = n/size_data) %>%
+  summarise(minD = min(dens.ha),
+            maxD = max(dens.ha),
+            meanD = mean(dens.ha),
+            sdD = sd(dens.ha), 
+            medianD = median(dens.ha),
+            q90D = quantile(dens.ha, 0.9),
+            q95D = quantile(dens.ha, 0.95)) %>%
+  kable(digits=2, caption = "Table S4.2. Summary values for the density of trees (N/ha) classified as common or rare for the 21 forest plots. SD - standard deviation, Quant - quantiles.")
+```
+
+
+
+```{r}
+dat.m2 <- dat.m %>% 
+  left_join(plots_info[,c(1,6,9,12,17:23,28)], by=c("fplot" = "ID")) %>%
+  mutate(tot.rich = rich_common + rich_rare,
+         tot.n = ntrees_common+ntrees_rare)
+```
+
+```{r, fig.height=10, fig.cap="Figure S4.1. Percentages of rare and common species and number of trees per forest plot. Forest plots are arranged by absolute latitude (from the largest to the smallest). See Table S1.2 for plots names."}
+prich <- dat.m2 %>%
+  pivot_longer(c(p.rich_common, p.rich_rare),names_to = "rarity",
+               values_to = "richness") %>%
+  ggplot(aes(x=fct_reorder(fplot, tot.rich, max),
+             y=richness, fill=rarity)) +
+    geom_col() +
+  xlab("") + ylab("Species richness (%)") +
+  labs(tag="A")+
+  scale_fill_discrete("Species",
+                      labels=c("common", "rare"))+
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+p.ntree <- dat.m2 %>%
+  pivot_longer(c(p.ntrees_common, p.ntrees_rare),names_to = "rarity",
+               values_to = "ntrees") %>%
+  ggplot(aes(x=fct_reorder(fplot, Nsp_literature, max),
+             y=ntrees, fill=rarity)) +
+    geom_col()+
+  labs(tag="B")+
+    xlab("") + ylab("Number of trees (%)") +
+
+  scale_fill_discrete("Species",
+                      labels=c("common", "rare"))+
+  theme(axis.text.x = element_text(angle = 45, hjust=1),
+        legend.position = "none")
+
+prich/p.ntree + plot_layout(guides = "collect")
+ggsave(here("figures/FIG_S4.1_class_species.jpeg"), height = 7, width = 6, unit="in")
+```
+
+
+
+
+
+
+```{r}
+library(wesanderson) #better colour palette
+# Gradient color for latitud
+pal <- wes_palette("Zissou1",21, type = "continuous")[21:1] # azul frio-temperado
+```
+
+```{r, fig.cap="Figure S4.2. Percentage of rare species against the number of species (log10 scale) for 21 worldwide distributed forest plots. Blue line and grey area are the fitted results and confidence intervals for a generalised additive model showing a decrease in the percentage of rare species with the number of species but only for forests with less than 100 species. Model's adjusted R2 = 0.30. Each forest plot is coloured by the latitude in absolute values."}
+dat.m2 %>% 
+  ggplot(aes(x=tot.rich, y=p.rich_rare))+ 
+  scale_x_log10()+
+  geom_point(aes( col=abs(lat)), size=3) +
+  scale_color_gradientn(name="Latitude \n (abs)",colors=pal) +
+  geom_smooth(method=mgcv::gam,se=T, formula = y ~ s(x, bs = "cs")) +
+  xlab("Number of species") +
+  ylab("Percentage of rare species") 
+ggsave(here("figures/FIG_S4.2_propRare_nsp.jpg"), width=8, height = 5)
+```
+
+```{r}
+mod <- mgcv::gam(p.rich_rare ~ s(log(tot.rich), bs="cs"), data=dat.m2, method = "REML")
+summary(mod)
+```
+
+
+
+# No time models
 
 Running models with different datasets:
 
@@ -51,7 +189,7 @@ grpvit <- as_labeller(c(grow = "Growth", mort="Mortality",
                         sp="Species", Residual = "Residual"))
 ```
 
-# Data
+## Data
 
 Growth
 
@@ -167,7 +305,7 @@ comb <- bind_rows(list(grow=grow, mort=mort, rec=rec), .id="vital") %>%
 
 
 
-# Comparing groups
+## Comparing groups
 
 ```{r, fig.height=10, fig.width=20}
 comb %>% 
@@ -373,7 +511,7 @@ pm
 ```
 
 
-# Dirichlet regression for exclude results with species richness
+## Dirichlet regression for exclude results with species richness
 
 Richness by rarefaction at the 6ha plot size (sampling unit 20x20m)
 
@@ -399,7 +537,7 @@ mcomb <- comb %>% group_by(vital,data, fplot,term, lat) %>%
             richness.rarefaction = mean(richness.rarefaction))
 ```
 
-## GROWTH
+### GROWTH
 
 ```{r}
 predirig <-  mcomb %>% 
@@ -452,7 +590,7 @@ ggplot(resid, aes(x=log.rich, y=resid)) + geom_point() +
   facet_grid(~term)
 ```
 
-## MORT
+### MORTALITY
 
 ```{r}
 predirim <-  mcomb %>% 
@@ -504,7 +642,7 @@ ggplot(resid, aes(x=log.rich, y=resid)) + geom_point() +
   facet_grid(~term)
 ```
 
-## REC
+### RECRUITMENT
 
 ```{r}
 predirir <-  mcomb %>% 
@@ -556,7 +694,7 @@ ggplot(resid, aes(x=log.rich, y=resid)) + geom_point() +
   facet_grid(~term)
 ```
 
-## FIGURE
+### FIGURE
 
 Calculated prediction interval
 
