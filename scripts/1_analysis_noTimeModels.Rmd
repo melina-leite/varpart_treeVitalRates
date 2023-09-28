@@ -431,7 +431,7 @@ tot.vpc.fig <- tvital %>% filter(q_size == "5") %>%
 ggplot(aes(x=vital, fill=term, col=term, y=VPC)) + 
   geom_col(alpha=0.7,width = 0.6) +
   facet_grid(~vital, scales="free_x", labeller = labvit) +
-   xlab("") + ylab("Mean VPC") +
+   xlab("") + ylab("Average VPC") +
     scale_fill_manual(values=cores, labels=grplab) +
   scale_color_manual(values=cores, labels=grplab) +
   theme(axis.text.x = element_blank(),
