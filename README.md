@@ -1,6 +1,6 @@
 # Major axes of variation in tree demography across global forests
 
- Analysis on variance partitioning on tree vital rates for Leite et al 2022. 
+ Analysis on variance partitioning on tree vital rates. 
  
  **Mansucript in preparation.**
 
